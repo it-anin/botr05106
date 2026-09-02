@@ -1,0 +1,83 @@
+# แม่แบบสำหรับสร้าง flow ออกรายงาน - ก๊อปไฟล์นี้แล้วแก้
+#
+# วิธีหาพิกัด/locator ของหน้าจอที่ยังไม่รู้จัก
+#   1. python run.py run flows/login.yaml          (เข้าโปรแกรมให้ถึงหน้าที่ต้องการ)
+#   2. python run.py inspect --watch               (แล้วคลิกด้วยมือทีละขั้น)
+#      ทุกครั้งที่หน้าจอเปลี่ยน จะได้ไฟล์ .txt/.json/.png ใน logs/inspect
+#   3. เอา control_id หรือพิกัดจากไฟล์นั้นมาใส่ที่นี่
+#   4. python run.py run flows/ไฟล์นี้ --dry-run    (ตรวจว่าหา control เจอครบ)
+#
+# พิกัดใน dw_click / dw_edit วัดจากมุมบนซ้ายของ DataWindow
+#   at: { x: 205, y: 314 }          พิกเซลตรง ๆ
+#   at: { x_pct: 0.5, y_pct: 0.78 } สัดส่วนของขนาด DataWindow (ทน DPI มากกว่า)
+# หาพิกัดสัมพัทธ์ได้จาก: (พิกัดในภาพ .png) ลบ (มุมบนซ้ายของ DataWindow)
+
+name: example_report
+description: แม่แบบ - ล็อกอินแล้วสำรวจหน้าจอหลัก
+on_error: abort
+
+steps:
+  # ใช้ flow ล็อกอินซ้ำ ไม่ต้องเขียนใหม่
+  - action: run_flow
+    name: เข้าสู่ระบบ
+    path: flows/login.yaml
+
+  - action: wait_window
+    name: จับหน้าจอหลักไว้อ้างอิง
+    as: main
+    timeout: 60
+    window:
+      class_name: "FNWND3125"
+      title: "Report Seniorsoft ProMaxx"
+
+  - action: screenshot
+    name: main_window
+    window: main
+
+  # เขียนโครงสร้าง control ทั้งหมดลง log - ใช้ตอนกำลังสร้าง flow ใหม่
+  # พอ flow นิ่งแล้วให้ลบ step นี้ออก เพราะ log จะยาวมาก
+  - action: dump_tree
+    name: ดูโครงสร้างหน้าจอหลัก
+    window: main
+
+  # ------------------------------------------------------------------
+  # ตัวอย่างขั้นตอนถัดไป - เปิดใช้งานเมื่อรู้พิกัด/locator จริงแล้ว
+  # ------------------------------------------------------------------
+  #
+  # รายการรายงานทางซ้ายเป็น DataWindow control_id=1010
+  # การเลือกรายงานคือการคลิกที่บรรทัดนั้น (นับ y จากหัวรายการลงมา)
+  #
+  # - action: dw_click
+  #   name: เลือกรายงาน R01.1
+  #   window: main
+  #   datawindow: { class_name: "pbdw125", control_id: 1010 }
+  #   at: { x: 200, y: 20 }
+  #
+  # - action: screenshot
+  #   name: after_select
+  #   window: main
+  #
+  # ปุ่มบนแถบเครื่องมือเป็น Button จริง กดด้วย control_id ได้ตรง ๆ
+  # - action: click
+  #   name: กดปุ่มบนแถบเครื่องมือ
+  #   window: main
+  #   control: { class_name: "Button", control_id: 1008 }
+  #
+  # ช่องกรอกเงื่อนไข (วันที่ สาขา ฯลฯ) มักอยู่ใน DataWindow อีกตัว
+  # ต้องใช้ method: chars เสมอ เพราะ WM_SETTEXT ไม่แจ้ง PowerBuilder ว่าค่าเปลี่ยน
+  # - action: dw_edit
+  #   name: ใส่วันที่เริ่มต้น
+  #   window: main
+  #   datawindow: { class_name: "pbdw125", control_id: 1014 }
+  #   at: { x: 80, y: 30 }
+  #   value: "01/09/2026"
+  #   method: chars
+  #   then_key: TAB
+  #
+  # ดักกล่องเตือนของโปรแกรมเพื่อให้ล้มเร็วแทนที่จะรอจนหมดเวลา
+  # - action: wait_window
+  #   name: รอหน้าต่างผลลัพธ์
+  #   as: result
+  #   timeout: 300
+  #   window: { class_name: "FNWNS3125", title_contains: "รายงาน" }
+  #   abort_if: { class_name: "#32770" }

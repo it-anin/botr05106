@@ -1,0 +1,47 @@
+# ค่าตั้งกลางของบอท ProMaxx Report
+# แก้ไฟล์นี้ได้โดยไม่ต้องแตะโค้ด Python
+
+app:
+  exe: "C:\\SeniorSoft ProMaxx\\promaxxreport.exe"
+  # จำเป็น: PowerBuilder โหลดไฟล์ .pbd จาก working directory
+  work_dir: "C:\\SeniorSoft ProMaxx"
+  process_name: "promaxxreport.exe"
+  # PB โหลด report_condition.pbd ขนาด 15MB ตอนเปิด จึงเผื่อเวลาไว้เยอะ
+  start_timeout: 90
+  # ให้เวลาโปรแกรมปิดเองก่อน ถ้าเกินนี้จะสั่ง terminate
+  # (ค้างได้ถ้ามีกล่องเตือนค้างอยู่ จึงไม่ควรตั้งนาน)
+  close_timeout: 8
+  # title ของหน้าต่างหลักหลังล็อกอินสำเร็จ
+  main_window_title: "Report Seniorsoft ProMaxx"
+
+paths:
+  logs: "logs"
+  screenshots: "screenshots"
+
+runner:
+  default_timeout: 30
+  poll_interval: 0.25
+  # หน่วงสั้น ๆ หลังทุก step ให้ PB ประมวลผล message ที่ส่งไป
+  step_pause: 0.2
+
+logging:
+  level: INFO
+  max_bytes: 2000000
+  backup_count: 10
+  # ค่าของตัวแปรเหล่านี้จะถูกแทนด้วย *** ในทุก log
+  mask_env:
+    - PROMAXX_PASSWORD
+
+watchdog:
+  enabled: true
+  interval: 1.0
+  # หน้าต่างที่ "คาดหวัง" ระหว่าง flow - watchdog จะไม่ยุ่ง
+  ignore_title_re:
+    - "Report Seniorsoft ProMaxx"
+  # กติกาจัดการ dialog แปลกปลอม ตรวจตามลำดับ ใช้อันแรกที่ match
+  rules:
+    - name: "message box มาตรฐาน"
+      class_name: "#32770"
+      # dismiss = กดปุ่มตาม button_title_re / abort = หยุด flow / log = แค่บันทึกภาพ
+      policy: log
+      button_title_re: "(?i)^(ok|ตกลง|yes|ใช่)$"

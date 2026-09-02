@@ -1,0 +1,15 @@
+# ความลับ - ห้าม commit
+.env
+secrets.yaml
+
+# ผลลัพธ์การรัน
+logs/
+screenshots/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/

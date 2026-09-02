@@ -1,0 +1,11 @@
+# ทุกตัวติดตั้งอยู่แล้วบนเครื่องนี้ (Python 3.11 ที่ C:\Program Files\Python311)
+# ไฟล์นี้มีไว้เผื่อย้ายไปเครื่องอื่น
+pywinauto==0.6.8
+pywin32==306
+PyYAML==6.0.1
+python-dotenv==1.2.1
+psutil==7.1.3
+Pillow==10.0.0
+
+# ใช้เฉพาะทางเลือกสำรอง (OCR อ่าน DataWindow) - ไม่จำเป็นสำหรับ flow ปกติ
+# pytesseract==0.3.13

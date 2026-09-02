@@ -1,0 +1,84 @@
+# เปิด promaxxreport.exe แล้วล็อกอิน
+#
+# หน้าล็อกอินของ ProMaxx เป็น DataWindow (pbdw125) ทั้งหน้า ช่องกรอกกับปุ่ม
+# Sign in ไม่ใช่ control จริง จึงต้องคลิกด้วยพิกัดแล้วให้ PowerBuilder เลื่อน
+# in-place editor (Edit id=11 = ชื่อผู้ใช้งาน, id=12 = รหัสผ่าน) มาให้
+#
+# พิกัดเป็นสัดส่วนของขนาด DataWindow (ปัจจุบัน 413x403) จึงทนต่อการเปลี่ยน DPI
+# รหัสผู้ใช้/รหัสผ่านอ่านจากไฟล์ .env ไม่เก็บไว้ในไฟล์นี้
+
+name: login
+description: เข้าสู่ระบบ Seniorsoft ProMaxx Report
+on_error: abort
+
+steps:
+  - action: launch_app
+    name: เปิดโปรแกรม
+    if_running: restart
+
+  - action: wait_window
+    name: รอหน้าจอ Seniorsoft Login
+    as: login
+    timeout: 90
+    window:
+      class_name: "FNWNS3125"
+      has_child: { class_name: "pbdw125", control_id: 1001, visible: "any" }
+
+  - action: screenshot
+    name: 01_login
+    window: login
+
+  # ต้องใช้ method: chars (WM_CHAR ทีละตัว) ไม่ใช่ settext
+  # เพราะ WM_SETTEXT ไม่แจ้ง DataWindow ว่าค่าเปลี่ยน PowerBuilder จึงไม่ commit
+  # ค่าเข้า column buffer แล้วขึ้นเตือน "ยังไม่ได้ป้อนข้อมูล User Login"
+  - action: dw_edit
+    name: กรอกชื่อผู้ใช้งาน
+    window: login
+    datawindow: { class_name: "pbdw125", control_id: 1001 }
+    at: { x_pct: 0.605, y_pct: 0.355 }
+    expect_edit: 11
+    value: "${PROMAXX_USER_CODE}"
+    method: chars
+    then_key: TAB
+    retry: { times: 2, delay: 0.6 }
+
+  - action: dw_edit
+    name: กรอกรหัสผ่าน
+    window: login
+    datawindow: { class_name: "pbdw125", control_id: 1001 }
+    at: { x_pct: 0.605, y_pct: 0.454 }
+    expect_edit: 12
+    value: "${PROMAXX_PASSWORD}"
+    method: chars
+    verify: false          # ES_PASSWORD - วินโดวส์ไม่ให้อ่านค่ากลับข้ามโปรเซส
+    retry: { times: 2, delay: 0.6 }
+
+  - action: screenshot
+    name: 02_filled
+    window: login
+
+  - action: dw_click
+    name: กดปุ่ม Sign in
+    window: login
+    datawindow: { class_name: "pbdw125", control_id: 1001 }
+    at: { x_pct: 0.496, y_pct: 0.779 }
+
+  # abort_if ทำให้รู้ผลทันทีถ้าโปรแกรมขึ้นกล่องเตือน แทนที่จะรอจนหมดเวลา
+  - action: wait_window_gone
+    name: รอหน้าล็อกอินปิด
+    window: login
+    timeout: 45
+    abort_if: { class_name: "#32770" }
+
+  - action: wait_window
+    name: รอหน้าจอหลัก
+    as: main
+    timeout: 60
+    window:
+      class_name: "FNWND3125"
+      title: "Report Seniorsoft ProMaxx"
+    abort_if: { class_name: "#32770" }
+
+  - action: screenshot
+    name: 03_main
+    window: main
