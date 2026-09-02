@@ -348,19 +348,30 @@ def _resolve_dw(ctx: Context, step: dict) -> int:
                                key="datawindow")
 
 
-@action("dw_click", ("window", "datawindow", "at"))
+@action("dw_click", ("window", "datawindow", "at", "expect_change",
+                     "change_region", "change_timeout"))
 def act_dw_click(ctx: Context, step: dict) -> None:
     """คลิกที่พิกัดหนึ่งใน DataWindow (at: {x_pct, y_pct} หรือ {x, y})"""
     hwnd = _resolve_dw(ctx, step)
     at = step.get("at")
     if at is None:
         raise StepError("dw_click ต้องระบุ 'at' เช่น at: { x_pct: 0.5, y_pct: 0.78 }")
+
     if ctx.dry_run:
         x, y = dw.resolve_point(hwnd, at)
-        log.info("dry-run: จะคลิก DataWindow %s ที่ client (%d,%d) ขนาด %s",
-                 hex(hwnd), x, y, win.get_client_size(hwnd))
+        log.info("dry-run: จะคลิก DataWindow %s ที่ client (%d,%d) ขนาด %s%s",
+                 hex(hwnd), x, y, win.get_client_size(hwnd),
+                 " พร้อมตรวจว่าหน้าจอเปลี่ยนจริง" if step.get("expect_change") else "")
         return
-    x, y = dw.click(hwnd, at)
+
+    if step.get("expect_change"):
+        x, y = dw.click_and_wait_change(
+            hwnd, at,
+            region=step.get("change_region"),
+            timeout=float(step.get("change_timeout", 5)),
+        )
+    else:
+        x, y = dw.click(hwnd, at)
     log.info("คลิก DataWindow %s ที่ client (%d,%d)", hex(hwnd), x, y)
 
 
