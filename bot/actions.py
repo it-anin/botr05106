@@ -71,11 +71,15 @@ def act_launch_app(ctx: Context, step: dict) -> None:
 
 @action("stop_app")
 def act_stop_app(ctx: Context, step: dict) -> None:
-    """ปิดโปรแกรม"""
+    """ปิดโปรแกรม (ล้มถ้าปิดไม่ลงจริง)"""
     if ctx.dry_run:
         log.info("dry-run: ข้ามการปิดโปรแกรม")
         return
-    ctx.app.stop()
+    closed = ctx.app.stop()
+    # เคลียร์ pid กัน step ถัดไปเผลออ้างถึง process ที่ตายแล้ว
+    ctx.app.pid = None
+    ctx.windows.clear()
+    log.info("ปิดโปรแกรมแล้ว (%d process)", closed)
 
 
 # --------------------------------------------------------------- หน้าต่าง

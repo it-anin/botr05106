@@ -137,3 +137,12 @@ steps:
   - action: screenshot
     name: 01_after_export
     window: main
+
+  # ปิดโปรแกรมเมื่อจบงาน - ต้องอยู่หลัง assert_file และ screenshot
+  # เพราะสองอันนั้นต้องการให้โปรแกรมยังเปิดอยู่
+  #
+  # ใส่เฉพาะ flow นี้ซึ่งเป็นตัวนอกสุดที่ใช้รันจริง ส่วน flow ระหว่างทาง
+  # (login, r05_1, r05_106, r05_106_generate, r05_106_confirm) ตั้งใจให้เปิดค้างไว้
+  # จะได้ใช้ run.py inspect ส่องหน้าจอต่อได้
+  - action: stop_app
+    name: ปิดโปรแกรม ProMaxx

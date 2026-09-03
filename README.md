@@ -267,13 +267,38 @@ const text = readFileSync(csvPath, 'utf-8').replace(/^﻿/, '');
 `max_age` สำคัญ — กันไม่ให้ไฟล์เก่าจากรอบก่อนถูกนับว่าผ่านตอนที่การส่งออกรอบนี้ล้มเหลว
 และ action นี้รอจนขนาดไฟล์หยุดนิ่งก่อน จึงไม่ผ่านตอนที่ไฟล์ยังเขียนไม่เสร็จ
 
+## flow ที่มีอยู่
+
+แต่ละตัวต่อยอดจากตัวบนด้วย `run_flow` ไม่ได้เขียนขั้นตอนซ้ำ
+
+| ไฟล์ | ได้อะไร | ปิดโปรแกรมเมื่อจบ |
+|---|---|---|
+| `flows/login.yaml` | ล็อกอิน | ไม่ปิด |
+| `flows/r05_1.yaml` | + ขยาย R05.1 | ไม่ปิด |
+| `flows/r05_106.yaml` | + เปิดรายงาน R05.106 | ไม่ปิด |
+| `flows/r05_106_generate.yaml` | + กดสร้างรายงาน (ได้หน้าเงื่อนไข) | ไม่ปิด |
+| `flows/r05_106_confirm.yaml` | + กดตกลง ได้รายงานจริง | ไม่ปิด |
+| **`flows/r05_106_export.yaml`** | **+ ส่งออก CSV** ← ตัวเต็มที่ใช้รันจริง | **ปิดให้** |
+
+flow ระหว่างทาง **ตั้งใจให้เปิดโปรแกรมค้างไว้** เพื่อใช้ `run.py inspect` ส่องหน้าจอต่อได้
+มีแต่ตัวนอกสุดที่ปิดให้ ถ้าอยากให้ตัวไหนปิดด้วยก็เพิ่มต่อท้ายไฟล์นั้น
+
+```yaml
+  - action: stop_app
+    name: ปิดโปรแกรม ProMaxx
+```
+
+`stop_app` ส่ง `WM_CLOSE` ก่อน รอตาม `close_timeout` ใน `settings.yaml` (8 วินาที)
+ไม่ยอมปิดค่อย `terminate` แล้ว `kill` และ **ตรวจซ้ำตอนจบว่าไม่มี process เหลือจริง**
+ถ้ายังเหลือจะโยน error ไม่ปล่อยให้ flow รายงานว่าสำเร็จทั้งที่โปรแกรมยังรันอยู่
+
 ## โครงสร้างไฟล์
 
 ```
 run.py                  CLI
 settings.yaml           ค่าตั้งกลาง (path, timeout, watchdog)
 .env                    รหัสผู้ใช้/รหัสผ่าน (gitignored)
-flows/login.yaml        flow ล็อกอิน
+flows/                  flow ทั้งหมด (ดูตารางด้านบน)
 flows/example_report.yaml  แม่แบบสำหรับ flow ใหม่
 bot/win.py              ส่ง/อ่าน window message
 bot/locators.py         หาหน้าต่างและ control จากสเปกใน YAML
@@ -318,9 +343,12 @@ steps:
 ## ตั้งรันอัตโนมัติ
 
 ```powershell
-.\tools\register_task.ps1 -Time 06:30 -Flows "flows/login.yaml"
+.\tools\register_task.ps1 -Time 06:30 -Flows "flows/r05_106_export.yaml"
 Start-ScheduledTask -TaskName "ProMaxxReportBot"    # ทดสอบทันที
 ```
+
+`r05_106_export.yaml` ปิดโปรแกรมให้เมื่อจบ จึงไม่มีหน้าต่างค้างบนเดสก์ท็อประหว่างวัน
+และรอบถัดไปเริ่มจากสภาพสะอาดเสมอ
 
 **ข้อจำกัดที่เลี่ยงไม่ได้:** GUI automation ต้องมี interactive desktop
 Scheduled Task จึงต้องเป็น *"Run only when user is logged on"* เท่านั้น

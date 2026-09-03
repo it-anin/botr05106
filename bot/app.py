@@ -82,11 +82,17 @@ class PromaxxApp:
         log.info("เกาะโปรแกรมที่เปิดอยู่แล้ว pid=%s", self.pid)
         return self.pid
 
-    def stop(self) -> None:
-        """ปิดอย่างสุภาพก่อน (WM_CLOSE) ไม่ยอมค่อยฆ่า"""
+    def stop(self) -> int:
+        """ปิดอย่างสุภาพก่อน (WM_CLOSE) ไม่ยอมค่อยฆ่า
+
+        คืนจำนวน process ที่ปิดไป และโยน AppError ถ้ายังปิดไม่ลงจริง ๆ
+        เพื่อไม่ให้ flow รายงานว่าสำเร็จทั้งที่โปรแกรมยังรันอยู่
+        """
         pids = self.find_running()
         if not pids:
-            return
+            log.info("โปรแกรมไม่ได้เปิดอยู่ ไม่ต้องปิด")
+            return 0
+        count = len(pids)
         for pid in pids:
             for hwnd in win.top_windows(pid):
                 if win.is_visible(hwnd):
@@ -94,12 +100,15 @@ class PromaxxApp:
         deadline = time.monotonic() + self.close_timeout
         while time.monotonic() < deadline:
             if not self.find_running():
-                log.info("โปรแกรมปิดเรียบร้อย")
-                return
+                log.info("โปรแกรมปิดเรียบร้อย (%d process)", count)
+                self.pid = None
+                return count
             time.sleep(0.3)
 
         for pid in self.find_running():
-            log.warning("โปรแกรมไม่ยอมปิด สั่ง terminate pid=%s", pid)
+            log.warning("โปรแกรมไม่ยอมปิดเองใน %.0f วินาที สั่ง terminate pid=%s "
+                        "(อาจมีหน้าต่างถามยืนยันตอนปิดค้างอยู่)",
+                        self.close_timeout, pid)
             try:
                 p = psutil.Process(pid)
                 p.terminate()
@@ -110,8 +119,20 @@ class PromaxxApp:
                 log.warning("terminate ไม่สำเร็จ สั่ง kill pid=%s", pid)
                 try:
                     psutil.Process(pid).kill()
-                except psutil.NoSuchProcess:
+                    psutil.Process(pid).wait(timeout=5)
+                except (psutil.NoSuchProcess, psutil.TimeoutExpired):
                     pass
+
+        # ตรวจปิดท้าย - ถ้ายังเหลือแปลว่าปิดไม่ลงจริง ต้องบอกให้รู้
+        left = self.find_running()
+        if left:
+            raise AppError(
+                f"ปิดโปรแกรมไม่สำเร็จ ยังเหลือ pid={left} ที่ยังรันอยู่\n"
+                f"  ลองปิดด้วยมือ หรือสั่ง: taskkill /F /PID {left[0]}"
+            )
+        log.info("โปรแกรมปิดเรียบร้อย (%d process, ต้องใช้ terminate)", count)
+        self.pid = None
+        return count
 
     def start_or_attach(self, policy: str = "attach") -> int:
         """policy: attach | restart | fail | reuse_or_start"""
