@@ -1,0 +1,61 @@
+# เปิดรายงาน R05.106 แล้วกดปุ่ม "สร้างรายงาน"
+#
+# ของในกรอบขวาเป็น control จริง จึงไม่ต้องใช้พิกัดเลย หา locator ด้วยข้อความได้
+# แถบเครื่องมือมีปุ่มซ้ำที่ถูกซ่อนไว้ชื่อเดียวกัน แต่สเปกค้นหาตัดตัวที่มองไม่เห็น
+# ออกอยู่แล้ว (visible ค่าเริ่มต้นเป็น true) จึงได้ปุ่มที่ถูกต้องเสมอ
+
+#
+# หน้าต่างเงื่อนไขที่เด้งขึ้นมา (FNWNS3125 title='เงื่อนไขการสร้างรายงาน')
+#     pbdw125 id=1000              ฟอร์มเงื่อนไข (สินค้าทั้งหมด / กลุ่มสินค้า / สินค้า)
+#     { class_name: "Button", title: "ตกลง" }   ปุ่มยืนยัน
+#     { class_name: "Button", title: "ออก" }    ปุ่มยกเลิก
+
+name: r05_106_generate
+description: เปิด R05.106 แล้วกดสร้างรายงาน จนได้หน้าต่างเงื่อนไข
+on_error: abort
+
+steps:
+  - action: run_flow
+    name: เปิดรายงาน R05.106
+    path: flows/r05_106.yaml
+
+  - action: wait_window
+    name: จับหน้าจอหลักไว้อ้างอิง
+    as: main
+    timeout: 60
+    window:
+      class_name: "FNWND3125"
+      title: "Report Seniorsoft ProMaxx"
+
+  - action: wait_control
+    name: รอให้ปุ่มสร้างรายงานพร้อมใช้งาน
+    window: main
+    control: { class_name: "Button", title: "สร้างรายงาน" }
+    state: enabled
+    timeout: 30
+
+  # กดแล้วจะไม่ได้รายงานทันที แต่จะมีหน้าต่าง "เงื่อนไขการสร้างรายงาน" เด้งขึ้นมาก่อน
+  # จึงไม่ใช้ expect_change (เทียบภาพ) แต่ใช้ wait_window รอหน้าต่างนั้นแทน
+  # ซึ่งแน่นอนกว่าเพราะยึดจากชื่อหน้าต่างจริงที่โปรแกรมสร้าง
+  - action: click
+    name: กดปุ่มสร้างรายงาน
+    window: main
+    control: { class_name: "Button", title: "สร้างรายงาน" }
+    method: message
+
+  - action: wait_window
+    name: รอหน้าต่างเงื่อนไขการสร้างรายงาน
+    as: cond
+    timeout: 60
+    window:
+      class_name: "FNWNS3125"
+      title: "เงื่อนไขการสร้างรายงาน"
+    abort_if: { class_name: "#32770" }
+
+  - action: screenshot
+    name: 01_condition_dialog
+    window: cond
+
+  - action: screenshot
+    name: 02_full_screen
+    window: main

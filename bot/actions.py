@@ -10,7 +10,7 @@ import time
 from typing import Any, Callable
 
 from . import datawindow as dw
-from . import win
+from . import watch, win
 from .context import Context, StepError
 from .logging_setup import get_logger
 
@@ -234,22 +234,67 @@ def act_wait_control(ctx: Context, step: dict) -> None:
 
 # --------------------------------------------------------------- กด/พิมพ์
 
+# คีย์ที่ใช้ตรวจว่าการกดมีผลจริง - ใช้ร่วมกันทั้ง click และ dw_click
+CHANGE_KEYS = ("expect_change", "change_region", "change_timeout",
+               "change_min_pixels", "change_window", "change_control")
 
-@action("click", ("window", "control", "method"))
+
+def _resolve_watch(ctx: Context, step: dict) -> int | None:
+    """หา hwnd ที่จะเฝ้าดูการเปลี่ยนแปลง - None แปลว่าใช้เป้าหมายของการกดเอง"""
+    if "change_window" in step and "change_control" in step:
+        raise StepError("ใส่ได้อย่างเดียวระหว่าง 'change_window' กับ 'change_control'")
+
+    timeout = _timeout(ctx, step)
+    if "change_window" in step:
+        return ctx.resolve_window(step["change_window"], timeout=timeout)
+    if "change_control" in step:
+        window = ctx.resolve_window(step.get("window"), timeout=timeout)
+        return ctx.resolve_control(window, step["change_control"],
+                                   timeout=timeout, key="change_control")
+    return None
+
+
+def _make_watcher(ctx: Context, step: dict, default_hwnd: int):
+    """สร้างตัวเฝ้าดูตามคีย์ change_* ใน step - None ถ้าไม่ได้ขอให้ตรวจ"""
+    if not step.get("expect_change"):
+        return None
+    hwnd = _resolve_watch(ctx, step) or default_hwnd
+    label = ("เป้าหมายที่กด" if hwnd == default_hwnd
+             else f"หน้าต่าง/control {hex(hwnd)}")
+    return watch.ChangeWatcher(
+        hwnd,
+        region=step.get("change_region"),
+        min_pixels=int(step.get("change_min_pixels",
+                                watch.DEFAULT_MIN_CHANGED_PIXELS)),
+        label=label,
+    )
+
+
+@action("click", ("window", "control", "method") + CHANGE_KEYS)
 def act_click(ctx: Context, step: dict) -> None:
     """กด control (method: message | bm | center)"""
     _, hwnd = _target(ctx, step)
     method = str(step.get("method", "message")).lower()
+    if method not in ("bm", "message", "center"):
+        raise StepError(f"ไม่รู้จัก method {method!r} (ใช้ message หรือ bm)")
+
     if ctx.dry_run:
-        log.info("dry-run: จะกด (%s) %s", method, _describe(hwnd))
+        log.info("dry-run: จะกด (%s) %s%s", method, _describe(hwnd),
+                 " พร้อมตรวจว่าหน้าจอเปลี่ยนจริง" if step.get("expect_change") else "")
         return
+
+    watcher = _make_watcher(ctx, step, hwnd)
+    armed = watcher.arm() if watcher else False
+
     log.info("กด (%s) %s", method, _describe(hwnd))
     if method == "bm":
         win.click_bm(hwnd)
-    elif method in ("message", "center"):
-        win.click_center(hwnd)
     else:
-        raise StepError(f"ไม่รู้จัก method {method!r} (ใช้ message หรือ bm)")
+        win.click_center(hwnd)
+
+    if armed:
+        watcher.wait(timeout=float(step.get("change_timeout", 5)),
+                     context=f"หลังกด {_describe(hwnd)}")
 
 
 @action("set_text", ("window", "control", "value", "method", "verify"))
@@ -348,24 +393,7 @@ def _resolve_dw(ctx: Context, step: dict) -> int:
                                key="datawindow")
 
 
-def _resolve_watch(ctx: Context, step: dict) -> int | None:
-    """หา hwnd ที่จะเฝ้าดูการเปลี่ยนแปลง - None แปลว่าดูที่ DataWindow ที่คลิกเอง"""
-    if "change_window" in step and "change_control" in step:
-        raise StepError("ใส่ได้อย่างเดียวระหว่าง 'change_window' กับ 'change_control'")
-
-    timeout = _timeout(ctx, step)
-    if "change_window" in step:
-        return ctx.resolve_window(step["change_window"], timeout=timeout)
-    if "change_control" in step:
-        window = ctx.resolve_window(step.get("window"), timeout=timeout)
-        return ctx.resolve_control(window, step["change_control"],
-                                   timeout=timeout, key="change_control")
-    return None
-
-
-@action("dw_click", ("window", "datawindow", "at", "expect_change",
-                     "change_region", "change_timeout", "change_min_pixels",
-                     "change_window", "change_control"))
+@action("dw_click", ("window", "datawindow", "at") + CHANGE_KEYS)
 def act_dw_click(ctx: Context, step: dict) -> None:
     """คลิกที่พิกัดหนึ่งใน DataWindow (at: {x_pct, y_pct} หรือ {x, y})"""
     hwnd = _resolve_dw(ctx, step)
@@ -375,26 +403,23 @@ def act_dw_click(ctx: Context, step: dict) -> None:
 
     if ctx.dry_run:
         x, y = dw.resolve_point(hwnd, at)
-        watch = _resolve_watch(ctx, step) if step.get("expect_change") else None
+        target = _resolve_watch(ctx, step) if step.get("expect_change") else None
         log.info("dry-run: จะคลิก DataWindow %s ที่ client (%d,%d) ขนาด %s%s",
                  hex(hwnd), x, y, win.get_client_size(hwnd),
-                 (f" พร้อมตรวจว่า {_describe(watch)} เปลี่ยนจริง" if watch
+                 (f" พร้อมตรวจว่า {_describe(target)} เปลี่ยนจริง" if target
                   else " พร้อมตรวจว่าหน้าจอเปลี่ยนจริง" if step.get("expect_change")
                   else ""))
         return
 
-    if step.get("expect_change"):
-        x, y = dw.click_and_wait_change(
-            hwnd, at,
-            watch_hwnd=_resolve_watch(ctx, step),
-            region=step.get("change_region"),
-            timeout=float(step.get("change_timeout", 5)),
-            min_pixels=int(step.get("change_min_pixels",
-                                    dw.DEFAULT_MIN_CHANGED_PIXELS)),
-        )
-    else:
-        x, y = dw.click(hwnd, at)
+    watcher = _make_watcher(ctx, step, hwnd)
+    armed = watcher.arm() if watcher else False
+
+    x, y = dw.click(hwnd, at)
     log.info("คลิก DataWindow %s ที่ client (%d,%d)", hex(hwnd), x, y)
+
+    if armed:
+        watcher.wait(timeout=float(step.get("change_timeout", 5)),
+                     context=f"หลังคลิก DataWindow {hex(hwnd)} ที่ client ({x},{y})")
 
 
 @action("dw_edit", ("window", "datawindow", "at", "value", "expect_edit",

@@ -14,14 +14,10 @@ DataWindow วาดทุกอย่างเอง - ช่องกรอก
 
 from __future__ import annotations
 
-import time
 from typing import Any
-
-from PIL import ImageChops
 
 from . import win
 from .logging_setup import get_logger
-from .shots import capture_image, is_blank
 
 log = get_logger()
 
@@ -31,7 +27,6 @@ class DataWindowError(Exception):
 
 
 _AT_KEYS = {"x", "y", "x_pct", "y_pct"}
-_REGION_KEYS = {"left", "top", "right", "bottom"}
 
 
 def resolve_point(dw_hwnd: int, at: dict) -> tuple[int, int]:
@@ -97,144 +92,6 @@ def click(dw_hwnd: int, at: dict) -> tuple[int, int]:
     log.debug("คลิก DataWindow %s ที่ client (%d,%d)", hex(dw_hwnd), x, y)
     win.click_client(dw_hwnd, x, y)
     return x, y
-
-
-def _crop(img, region: dict | None):
-    """ตัดเฉพาะพื้นที่ที่สนใจ
-
-    พิกัดนับจากมุมบนซ้ายของ "กรอบหน้าต่าง" ของสิ่งที่ถ่าย (GetWindowRect)
-    ไม่ใช่ client area - สำหรับ control ลูกที่ไม่มีขอบสองค่านี้เท่ากัน
-    แต่สำหรับหน้าต่างหลักจะต่างกันตามความหนาของขอบหน้าต่าง
-    """
-    if not region:
-        return img
-    unknown = set(region) - _REGION_KEYS
-    if unknown:
-        raise DataWindowError(
-            f"'change_region' มีคีย์ที่ไม่รู้จัก: {sorted(unknown)} "
-            f"(ใช้ได้: {sorted(_REGION_KEYS)})"
-        )
-    width, height = img.size
-    left = max(0, int(region.get("left", 0)))
-    top = max(0, int(region.get("top", 0)))
-    right = min(width, int(region.get("right", width)))
-    bottom = min(height, int(region.get("bottom", height)))
-    if right <= left or bottom <= top:
-        raise DataWindowError(
-            f"'change_region' {region} ไม่เหลือพื้นที่ให้เทียบ "
-            f"(ภาพที่ถ่ายได้ขนาด {width}x{height})"
-        )
-    return img.crop((left, top, right, bottom))
-
-
-def _stable_image(hwnd: int, interval: float = 0.15, attempts: int = 6):
-    """ถ่ายภาพจนได้สองครั้งติดกันที่เหมือนกัน
-
-    ใช้ทำภาพตั้งต้นก่อนคลิก ถ้าถ่ายตอนหน้าจอกำลังวาดใหม่ (เช่น scrollbar
-    เพิ่งโผล่ทำให้ขนาด control เปลี่ยน) ภาพตั้งต้นจะเพี้ยน แล้วการเทียบ
-    ก่อน-หลังจะรายงานว่า "เปลี่ยนแล้ว" ทั้งที่คลิกไม่โดน
-    """
-    prev = capture_image(hwnd)
-    if prev is None:
-        return None
-    for _ in range(attempts):
-        time.sleep(interval)
-        cur = capture_image(hwnd)
-        if cur is None:
-            return prev
-        if cur.size == prev.size and cur.tobytes() == prev.tobytes():
-            return cur
-        prev = cur
-    log.debug("ภาพของ %s ยังไม่นิ่งหลังรอ %.1fs จะใช้ภาพล่าสุดเป็นตัวตั้งต้น",
-              hex(hwnd), interval * attempts)
-    return prev
-
-
-def _diff_stats(before, after) -> tuple[int, tuple | None]:
-    """คืน (จำนวน pixel ที่ต่างกัน, กรอบสี่เหลี่ยมที่ครอบบริเวณที่ต่าง)"""
-    d = ImageChops.difference(before.convert("RGB"), after.convert("RGB"))
-    bbox = d.getbbox()
-    if bbox is None:
-        return 0, None
-    return sum(d.convert("L").histogram()[1:]), bbox
-
-
-# เกณฑ์ขั้นต่ำของจำนวน pixel ที่ต้องเปลี่ยนถึงจะนับว่าคลิกโดน
-# ตั้งไว้เผื่อ "สัญญาณรบกวน" ที่ไม่ได้เกิดจากการคลิก เช่นตัวกะพริบ (caret)
-# ในช่องกรอกซึ่งกินพื้นที่ไม่กี่สิบ pixel - การเปลี่ยนหน้าจอจริงกินหลักพันขึ้นไป
-DEFAULT_MIN_CHANGED_PIXELS = 200
-
-
-def click_and_wait_change(dw_hwnd: int, at: dict, *, watch_hwnd: int | None = None,
-                          region: dict | None = None, timeout: float = 5.0,
-                          interval: float = 0.2,
-                          min_pixels: int = DEFAULT_MIN_CHANGED_PIXELS
-                          ) -> tuple[int, int]:
-    """คลิกแล้วรอจนภาพเปลี่ยน - ใช้ยืนยันว่าคลิกโดนจริง
-
-    PowerBuilder ไม่ตอบอะไรกลับมาเมื่อคลิกพลาด บอทจึงเงียบไปเฉย ๆ
-    การเทียบภาพก่อน-หลังเป็นวิธีเดียวที่รู้ได้ว่าหน้าจอขยับจริง
-
-    watch_hwnd ระบุว่าจะไปดูการเปลี่ยนแปลง "ที่ไหน" - ไม่ระบุคือดูที่ DataWindow
-    ที่คลิกเอง ใช้ระบุเมื่อผลของการคลิกไปโผล่ที่อื่น เช่นคลิกเมนูทางซ้าย
-    แล้วหน้าจอเงื่อนไขโผล่ในกรอบขวาของหน้าต่างเดิม
-
-    region จำกัดพื้นที่ที่ต้องเปลี่ยน เช่นตรวจเฉพาะใต้แถวที่กด หรือเฉพาะฝั่งขวา
-    เพื่อไม่ให้ "แค่เลือกแถว" (สีของแถวเปลี่ยน) ถูกนับว่าคลิกสำเร็จ
-
-    min_pixels กันตัวกะพริบและสัญญาณรบกวนอื่นไม่ให้ถูกนับว่าเป็นการเปลี่ยนหน้าจอ
-    """
-    watch = watch_hwnd or dw_hwnd
-    what = ("DataWindow ที่คลิก" if watch == dw_hwnd
-            else f"หน้าต่าง/control {hex(watch)}")
-
-    before_full = _stable_image(watch)
-    if before_full is None or is_blank(before_full):
-        reason = "ถ่ายภาพไม่ได้" if before_full is None else "ได้ภาพสีเดียวล้วน"
-        log.warning(
-            "ข้ามการตรวจผลคลิก (%s ที่ %s) - อาจเป็นเพราะหน้าจอถูกล็อก "
-            "จะคลิกให้แต่ยืนยันผลไม่ได้", reason, what,
-        )
-        return click(dw_hwnd, at)
-
-    before = _crop(before_full, region)
-    x, y = click(dw_hwnd, at)
-
-    best_changed, best_bbox = 0, None
-    deadline = time.monotonic() + timeout
-    while True:
-        time.sleep(interval)
-        after_full = capture_image(watch)
-        if after_full is not None and not is_blank(after_full):
-            if after_full.size != before_full.size:
-                log.info("ขนาดของ %s เปลี่ยนจาก %s เป็น %s หลังคลิก "
-                         "ถือว่าหน้าจอเปลี่ยนแล้ว",
-                         what, before_full.size, after_full.size)
-                return x, y
-            changed, bbox = _diff_stats(before, _crop(after_full, region))
-            if changed > best_changed:
-                best_changed, best_bbox = changed, bbox
-            if changed >= min_pixels:
-                log.info("ยืนยันแล้วว่าคลิกโดน %s เปลี่ยน %d pixel "
-                         "ในกรอบ %s หลังคลิกที่ (%d,%d)",
-                         what, changed, bbox, x, y)
-                return x, y
-        if time.monotonic() >= deadline:
-            noise = ""
-            if best_changed:
-                noise = (f"\n  เปลี่ยนมากสุดแค่ {best_changed} pixel ในกรอบ {best_bbox} "
-                         f"ซึ่งน้อยกว่าเกณฑ์ {min_pixels} - เล็กขนาดนี้มักเป็น"
-                         f"ตัวกะพริบหรือกรอบโฟกัส ไม่ใช่ผลของการคลิก")
-            raise DataWindowError(
-                f"คลิกที่ client ({x},{y}) ของ DataWindow {hex(dw_hwnd)} "
-                f"ขนาด {win.get_client_size(dw_hwnd)} แล้ว {what} ไม่เปลี่ยน "
-                f"ภายใน {timeout:.0f} วินาที"
-                + (f" (ตรวจเฉพาะพื้นที่ {region} ของภาพขนาด {before_full.size})"
-                   if region else "")
-                + noise
-                + "\n  แปลว่าคลิกไม่โดนเป้า - เปิดภาพใน screenshots/ "
-                  "แล้ววัดพิกัดใหม่ หรือปรับ change_region ให้ตรงพื้นที่ที่ควรเปลี่ยน"
-            )
 
 
 def focus_cell(dw_hwnd: int, at: dict, *, expect_edit: int | None = None,
