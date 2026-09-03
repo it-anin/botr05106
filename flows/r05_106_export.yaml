@@ -1,4 +1,4 @@
-# ส่งออกรายงาน R05.106 เป็นไฟล์ Excel (.XLSX)
+# ส่งออกรายงาน R05.106 เป็นไฟล์ CSV เพื่ออัปโหลดขึ้น Supabase
 #
 # ปุ่ม "ส่งออก" เปิด Save As dialog มาตรฐานของวินโดวส์ (#32770 title='Select File')
 # ซึ่งเป็น control จริงทั้งหมด สั่งงานด้วย locator ได้ตรง ๆ
@@ -15,11 +15,18 @@
 # ในช่องชื่อไฟล์ให้เอง
 #
 # อยากเปลี่ยนเป็นไฟล์ที่ไม่ทับกันให้ใส่วันที่ในชื่อ เช่น
-#     value: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106_${BOT_DATE}.XLSX"
+#     value: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106_${BOT_DATE}.CSV"
 # ตัวแปรที่ใช้ได้: ${BOT_DATE} ${BOT_TIME} ${BOT_DATETIME}
+#
+# CSV ที่ได้เป็น UTF-8 พร้อม BOM (ทดสอบแล้ว ไม่ใช่ ANSI ไทย ภาษาไทยไม่เพี้ยน)
+# ข้อมูลเป็นข้อมูลดิบของ DataWindow ชื่อคอลัมน์เป็นชื่อฐานข้อมูลตรง ๆ
+# (CF_BARCODE, CF_ITEMID, CF_ITEMNAME, ...) 27 คอลัมน์ ไม่มีแถวหัวกระดาษปน
+#
+# ฝั่ง Node ที่อ่านไฟล์นี้: readFileSync(path, 'utf-8') ไม่ตัด BOM ให้
+# ถ้าอ่านด้วยชื่อคอลัมน์ต้อง .replace(/^\uFEFF/, '') ก่อน
 
 name: r05_106_export
-description: ส่งออกรายงาน R05.106 เป็น XLSX ลงโฟลเดอร์ run-upload-stock
+description: ส่งออกรายงาน R05.106 เป็น CSV ลงโฟลเดอร์ run-upload-stock
 on_error: abort
 
 steps:
@@ -57,16 +64,16 @@ steps:
       title: "Select File"
 
   - action: select_combo
-    name: เลือกรูปแบบไฟล์ Excel (*.XLSX)
+    name: เลือกรูปแบบไฟล์ CSV
     window: save
     control: { class_name: "ComboBox", control_id: 1136 }
-    value: "Excel Files(*.XLSX)"
+    value: "CSV Files(*.CSV)"
 
   - action: set_text
     name: พิมพ์ path ปลายทางเต็ม ๆ
     window: save
     control: { class_name: "Edit", control_id: 1152 }
-    value: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.XLSX"
+    value: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.CSV"
 
   - action: click
     name: กดปุ่ม Save
@@ -122,8 +129,8 @@ steps:
   # การยืนยันที่แท้จริงของการส่งออก - ไฟล์ต้องมีอยู่จริงและเพิ่งถูกเขียนในรอบนี้
   - action: assert_file
     name: ตรวจว่าไฟล์ถูกเขียนจริง
-    path: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.XLSX"
-    min_size: 10000
+    path: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.CSV"
+    min_size: 100000
     max_age: 300
     timeout: 180
 
