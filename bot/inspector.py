@@ -104,15 +104,22 @@ def dump(app: PromaxxApp, out_dir: Path, tag: str = "snapshot",
             "windows": trees}
 
 
+_INTERESTING_CLASSES = {"Edit", "Button", "ComboBox", "Static", "ListBox",
+                        win.PB_DATAWINDOW_CLASS}
+
+
+def _is_interesting(cls: str) -> bool:
+    # tab control ของ PB ต่อท้ายด้วยเลขรุ่น (เช่น PBTabControl32_100) จึงเทียบด้วยคำนำหน้า
+    return cls in _INTERESTING_CLASSES or cls.startswith(win.PB_TAB_CLASS_PREFIX)
+
+
 def _suggest_locators(tree_node: dict) -> str:
     """เสนอ locator YAML สำหรับ control ที่กดหรือกรอกได้ในหน้าต่างนี้"""
-    interesting = {"Edit", "Button", "ComboBox", "Static", "ListBox",
-                   win.PB_TAB_CLASS, win.PB_DATAWINDOW_CLASS}
     rows = []
     counters: dict[str, int] = {}
     for n in win.flatten(tree_node):
         cls = n["class_name"]
-        if cls not in interesting:
+        if not _is_interesting(cls):
             continue
         idx = counters.get(cls, 0)
         counters[cls] = idx + 1

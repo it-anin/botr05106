@@ -348,8 +348,24 @@ def _resolve_dw(ctx: Context, step: dict) -> int:
                                key="datawindow")
 
 
+def _resolve_watch(ctx: Context, step: dict) -> int | None:
+    """หา hwnd ที่จะเฝ้าดูการเปลี่ยนแปลง - None แปลว่าดูที่ DataWindow ที่คลิกเอง"""
+    if "change_window" in step and "change_control" in step:
+        raise StepError("ใส่ได้อย่างเดียวระหว่าง 'change_window' กับ 'change_control'")
+
+    timeout = _timeout(ctx, step)
+    if "change_window" in step:
+        return ctx.resolve_window(step["change_window"], timeout=timeout)
+    if "change_control" in step:
+        window = ctx.resolve_window(step.get("window"), timeout=timeout)
+        return ctx.resolve_control(window, step["change_control"],
+                                   timeout=timeout, key="change_control")
+    return None
+
+
 @action("dw_click", ("window", "datawindow", "at", "expect_change",
-                     "change_region", "change_timeout"))
+                     "change_region", "change_timeout", "change_min_pixels",
+                     "change_window", "change_control"))
 def act_dw_click(ctx: Context, step: dict) -> None:
     """คลิกที่พิกัดหนึ่งใน DataWindow (at: {x_pct, y_pct} หรือ {x, y})"""
     hwnd = _resolve_dw(ctx, step)
@@ -359,16 +375,22 @@ def act_dw_click(ctx: Context, step: dict) -> None:
 
     if ctx.dry_run:
         x, y = dw.resolve_point(hwnd, at)
+        watch = _resolve_watch(ctx, step) if step.get("expect_change") else None
         log.info("dry-run: จะคลิก DataWindow %s ที่ client (%d,%d) ขนาด %s%s",
                  hex(hwnd), x, y, win.get_client_size(hwnd),
-                 " พร้อมตรวจว่าหน้าจอเปลี่ยนจริง" if step.get("expect_change") else "")
+                 (f" พร้อมตรวจว่า {_describe(watch)} เปลี่ยนจริง" if watch
+                  else " พร้อมตรวจว่าหน้าจอเปลี่ยนจริง" if step.get("expect_change")
+                  else ""))
         return
 
     if step.get("expect_change"):
         x, y = dw.click_and_wait_change(
             hwnd, at,
+            watch_hwnd=_resolve_watch(ctx, step),
             region=step.get("change_region"),
             timeout=float(step.get("change_timeout", 5)),
+            min_pixels=int(step.get("change_min_pixels",
+                                    dw.DEFAULT_MIN_CHANGED_PIXELS)),
         )
     else:
         x, y = dw.click(hwnd, at)
