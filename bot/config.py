@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,8 +21,16 @@ class ConfigError(Exception):
 
 
 def load_env() -> None:
-    """อ่าน .env เข้า os.environ (ไม่ทับค่าที่ตั้งไว้แล้วใน environment)"""
+    """อ่าน .env เข้า os.environ (ไม่ทับค่าที่ตั้งไว้แล้วใน environment)
+
+    พร้อมเติมตัวแปรวันเวลาไว้ใช้ตั้งชื่อไฟล์ใน flow เช่น ${BOT_DATE}
+    ตั้งชื่อขึ้นต้นด้วย BOT_ กันชนกับตัวแปรจริงของระบบ
+    """
     load_dotenv(ROOT / ".env", override=False)
+    now = datetime.now()
+    os.environ["BOT_DATE"] = now.strftime("%Y%m%d")
+    os.environ["BOT_TIME"] = now.strftime("%H%M%S")
+    os.environ["BOT_DATETIME"] = now.strftime("%Y%m%d_%H%M%S")
 
 
 def expand_vars(obj: Any, *, strict: bool = True) -> Any:

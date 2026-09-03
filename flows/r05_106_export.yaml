@@ -1,0 +1,132 @@
+# ส่งออกรายงาน R05.106 เป็นไฟล์ Excel (.XLSX)
+#
+# ปุ่ม "ส่งออก" เปิด Save As dialog มาตรฐานของวินโดวส์ (#32770 title='Select File')
+# ซึ่งเป็น control จริงทั้งหมด สั่งงานด้วย locator ได้ตรง ๆ
+#     ComboBox id=1136   รูปแบบไฟล์ (Save as type)
+#     Edit     id=1152   ชื่อไฟล์ (File name) -- พิมพ์ path เต็มได้ ไม่ต้องสนช่อง Save in
+#     Button   id=1      Save
+#     Button   id=2      Cancel
+#
+# รูปแบบไฟล์ที่เลือกได้
+#     Comma Files(Excel Files(*.XLS)   HTML(*.HTM)   Text Files(*.TXT)
+#     Excel Files(*.XLSX)              CSV Files(*.CSV)
+#
+# ต้องตั้งรูปแบบไฟล์ "ก่อน" พิมพ์ชื่อไฟล์ เพราะการเปลี่ยนรูปแบบจะไปแก้นามสกุล
+# ในช่องชื่อไฟล์ให้เอง
+#
+# อยากเปลี่ยนเป็นไฟล์ที่ไม่ทับกันให้ใส่วันที่ในชื่อ เช่น
+#     value: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106_${BOT_DATE}.XLSX"
+# ตัวแปรที่ใช้ได้: ${BOT_DATE} ${BOT_TIME} ${BOT_DATETIME}
+
+name: r05_106_export
+description: ส่งออกรายงาน R05.106 เป็น XLSX ลงโฟลเดอร์ run-upload-stock
+on_error: abort
+
+steps:
+  - action: run_flow
+    name: ออกรายงาน R05.106 ก่อน
+    path: flows/r05_106_confirm.yaml
+
+  - action: wait_window
+    name: จับหน้าจอหลักไว้อ้างอิง
+    as: main
+    timeout: 60
+    window:
+      class_name: "FNWND3125"
+      title: "Report Seniorsoft ProMaxx"
+
+  - action: wait_control
+    name: รอให้ปุ่มส่งออกพร้อมใช้งาน
+    window: main
+    control: { class_name: "Button", title: "ส่งออก" }
+    state: enabled
+    timeout: 30
+
+  - action: click
+    name: กดปุ่มส่งออก
+    window: main
+    control: { class_name: "Button", title: "ส่งออก" }
+    method: message
+
+  - action: wait_window
+    name: รอ Save As dialog
+    as: save
+    timeout: 60
+    window:
+      class_name: "#32770"
+      title: "Select File"
+
+  - action: select_combo
+    name: เลือกรูปแบบไฟล์ Excel (*.XLSX)
+    window: save
+    control: { class_name: "ComboBox", control_id: 1136 }
+    value: "Excel Files(*.XLSX)"
+
+  - action: set_text
+    name: พิมพ์ path ปลายทางเต็ม ๆ
+    window: save
+    control: { class_name: "Edit", control_id: 1152 }
+    value: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.XLSX"
+
+  - action: click
+    name: กดปุ่ม Save
+    window: save
+    control: { class_name: "Button", control_id: 1 }
+    method: bm
+
+  # รอบที่ 2 เป็นต้นไปไฟล์จะมีอยู่แล้ว วินโดวส์จะถามยืนยันเขียนทับ
+  # optional เพราะรอบแรกจะไม่มีหน้าต่างนี้ ตั้ง timeout สั้นเพื่อไม่ให้เสียเวลารอ
+  # ยึดจากการมีปุ่ม Yes (id=6) แทนชื่อหน้าต่าง เพราะชื่อเปลี่ยนตามภาษาของวินโดวส์
+  - action: click
+    name: ยืนยันเขียนทับไฟล์เดิม (ถ้ามี)
+    optional: true
+    timeout: 4
+    window:
+      class_name: "#32770"
+      has_child: { class_name: "Button", control_id: 6 }
+    control: { class_name: "Button", control_id: 6 }
+    method: bm
+
+  - action: wait_window_gone
+    name: รอ Save As dialog ปิด
+    window: save
+    timeout: 180
+
+  # โปรแกรมขึ้นกล่องบอกผลเอง - ใช้เป็นตัวยืนยันเชิงความหมาย ถ้าส่งออกพลาด
+  # ข้อความจะไม่ใช่ "สำเร็จ" แล้ว assert_text จะจับได้
+  - action: wait_window
+    name: รอกล่องแจ้งผลการส่งออก
+    as: done
+    timeout: 180
+    window:
+      class_name: "#32770"
+      title: "SeniorSoft ProMaxx"
+
+  - action: assert_text
+    name: ยืนยันว่าโปรแกรมบอกว่าสำเร็จ
+    window: done
+    control: { class_name: "Static", control_id: 65535 }
+    contains: "สำเร็จ"
+
+  - action: click
+    name: ปิดกล่องแจ้งผล
+    window: done
+    control: { class_name: "Button", control_id: 2 }
+    method: bm
+
+  - action: wait_window_gone
+    name: รอกล่องแจ้งผลปิด
+    window: done
+    timeout: 30
+
+  # การยืนยันที่แท้จริงของการส่งออก - ไฟล์ต้องมีอยู่จริงและเพิ่งถูกเขียนในรอบนี้
+  - action: assert_file
+    name: ตรวจว่าไฟล์ถูกเขียนจริง
+    path: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.XLSX"
+    min_size: 10000
+    max_age: 300
+    timeout: 180
+
+  - action: screenshot
+    name: 01_after_export
+    window: main

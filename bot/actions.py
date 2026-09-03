@@ -482,6 +482,59 @@ def act_assert_text(ctx: Context, step: dict) -> None:
     log.info("ตรวจข้อความผ่าน: %r", text)
 
 
+@action("assert_file", ("path", "min_size", "max_age"))
+def act_assert_file(ctx: Context, step: dict) -> None:
+    """ตรวจว่าไฟล์ถูกเขียนจริงในรอบนี้ (ใช้ยืนยันผลการส่งออก)
+
+    รอจนไฟล์โผล่ ขนาดถึงเกณฑ์ และขนาดหยุดนิ่ง (เขียนเสร็จแล้ว)
+    max_age กันไม่ให้ไฟล์เก่าจากรอบก่อนถูกนับว่าผ่าน
+    """
+    import time as _time
+    from pathlib import Path
+
+    raw = step.get("path")
+    if not raw:
+        raise StepError("assert_file ต้องระบุ 'path'")
+    path = Path(str(raw))
+    min_size = int(step.get("min_size", 1))
+    max_age = float(step.get("max_age", 300))
+    timeout = _timeout(ctx, step)
+
+    if ctx.dry_run:
+        log.info("dry-run: จะตรวจว่ามีไฟล์ %s ขนาดอย่างน้อย %d ไบต์", path, min_size)
+        return
+
+    deadline = _time.monotonic() + timeout
+    last_size = -1
+    while True:
+        if path.exists():
+            size = path.stat().st_size
+            age = _time.time() - path.stat().st_mtime
+            if size >= min_size and size == last_size:
+                if age > max_age:
+                    raise StepError(
+                        f"เจอไฟล์ {path} แต่ถูกแก้ไขล่าสุดเมื่อ {age:.0f} วินาทีที่แล้ว "
+                        f"ซึ่งเกิน {max_age:.0f} วินาที - น่าจะเป็นไฟล์เก่าจากรอบก่อน "
+                        f"ไม่ใช่ไฟล์ที่เพิ่งส่งออก"
+                    )
+                log.info("ไฟล์พร้อมแล้ว: %s (%s ไบต์ เขียนเมื่อ %.0f วินาทีที่แล้ว)",
+                         path, f"{size:,}", age)
+                return
+            last_size = size
+        if _time.monotonic() >= deadline:
+            if not path.exists():
+                raise StepError(
+                    f"ไม่พบไฟล์ {path} ภายใน {timeout:.0f} วินาที\n"
+                    f"  โฟลเดอร์ปลายทาง{'มีอยู่' if path.parent.is_dir() else 'ไม่มีอยู่'}\n"
+                    f"  ตรวจว่าพิมพ์ชื่อไฟล์ลงช่อง File name ถูกต้องและกดปุ่ม Save แล้วหรือยัง"
+                )
+            raise StepError(
+                f"ไฟล์ {path} มีอยู่แต่ขนาดยังไม่นิ่งหรือเล็กเกินไป "
+                f"({path.stat().st_size:,} ไบต์ ต้องการอย่างน้อย {min_size:,})"
+            )
+        _time.sleep(0.5)
+
+
 @action("screenshot", ("window", "name"))
 def act_screenshot(ctx: Context, step: dict) -> None:
     """บันทึกภาพหน้าต่างลงโฟลเดอร์ screenshots"""
