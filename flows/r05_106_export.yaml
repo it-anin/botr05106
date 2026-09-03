@@ -69,11 +69,14 @@ steps:
     control: { class_name: "ComboBox", control_id: 1136 }
     value: "CSV Files(*.CSV)"
 
+  # ส่งออกเป็นชื่อชั่วคราว .part ก่อน แล้วค่อยเปลี่ยนชื่อเป็นชื่อจริงตอนจบ
+  # ถ้า flow ล้มกลางทาง ไฟล์ชื่อจริงของรอบก่อนจะยังอยู่ครบ และปลายทางจะไม่มีวัน
+  # หยิบไฟล์ที่เขียนไม่เสร็จไปอัปโหลด
   - action: set_text
-    name: พิมพ์ path ปลายทางเต็ม ๆ
+    name: พิมพ์ path ปลายทางชั่วคราว
     window: save
     control: { class_name: "Edit", control_id: 1152 }
-    value: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.CSV"
+    value: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.part.CSV"
 
   - action: click
     name: กดปุ่ม Save
@@ -127,12 +130,19 @@ steps:
     timeout: 30
 
   # การยืนยันที่แท้จริงของการส่งออก - ไฟล์ต้องมีอยู่จริงและเพิ่งถูกเขียนในรอบนี้
+  # max_age กันไฟล์ .part ค้างจากรอบก่อนถูกนับว่าผ่าน
   - action: assert_file
-    name: ตรวจว่าไฟล์ถูกเขียนจริง
-    path: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.CSV"
+    name: ตรวจว่าไฟล์ชั่วคราวถูกเขียนจริง
+    path: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.part.CSV"
     min_size: 100000
     max_age: 300
     timeout: 180
+
+  # ผ่านการตรวจแล้วค่อยเผยแพร่เป็นชื่อจริง - อยู่ไดรฟ์เดียวกันจึงเป็น atomic
+  - action: move_file
+    name: เปลี่ยนชื่อเป็นไฟล์จริง
+    from: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.part.CSV"
+    to: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.CSV"
 
   - action: screenshot
     name: 01_after_export

@@ -12,8 +12,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 from bot import app as app_mod
@@ -70,16 +72,48 @@ def cmd_inspect(args) -> int:
 # ---------------------------------------------------------------- run
 
 
+def _write_last_run(cfg, args, started, status: str, exit_code: int,
+                    error: str | None, outputs: list) -> None:
+    """เขียนสรุปผลรอบล่าสุดลง logs/last_run.json
+
+    ให้สคริปต์อัปโหลดหรือ dashboard เช็คได้ว่ารอบล่าสุดสำเร็จไหม
+    และได้ไฟล์อะไรออกมาบ้าง โดยไม่ต้องไปไล่อ่าน log
+    """
+    finished = datetime.now()
+    payload = {
+        "status": status,
+        "exit_code": exit_code,
+        "started_at": started.isoformat(timespec="seconds"),
+        "finished_at": finished.isoformat(timespec="seconds"),
+        "duration_seconds": round((finished - started).total_seconds(), 1),
+        "flows": list(args.flows),
+        "dry_run": bool(args.dry_run),
+        "outputs": outputs,
+        "error": error,
+    }
+    try:
+        path = cfg.resolve_path("paths.logs", "logs") / "last_run.json"
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+        logging_setup.get_logger().info("บันทึกสรุปรอบล่าสุด: %s", path)
+    except Exception as exc:
+        logging_setup.get_logger().warning("เขียน last_run.json ไม่สำเร็จ: %s", exc)
+
+
 def cmd_run(args) -> int:
     from bot.runner import FlowRunner, SingleInstanceLock
 
     cfg, log = _boot(args)
+    started = datetime.now()
 
     lock = SingleInstanceLock("BOTR05106_promaxx_bot")
     if not args.allow_concurrent and not lock.acquire():
         log.error("มีบอทตัวอื่นกำลังรันอยู่ ยกเลิกรอบนี้")
+        _write_last_run(cfg, args, started, "already_running",
+                        EXIT_ALREADY_RUNNING, "มีบอทตัวอื่นกำลังรันอยู่", [])
         return EXIT_ALREADY_RUNNING
 
+    runner = None
     try:
         runner = FlowRunner(cfg, dry_run=args.dry_run)
         for flow_path in args.flows:
@@ -98,10 +132,14 @@ def cmd_run(args) -> int:
                         "ให้แก้ locator ในไฟล์ flow")
 
         log.info("จบทุก flow เรียบร้อย")
+        _write_last_run(cfg, args, started, "ok", EXIT_OK, None,
+                        runner.ctx.outputs)
         return EXIT_OK
     except Exception as exc:
         log.error("flow ล้มเหลว: %s", exc)
         log.debug("%s", traceback.format_exc())
+        _write_last_run(cfg, args, started, "failed", EXIT_FAILED, str(exc),
+                        runner.ctx.outputs if runner else [])
         return EXIT_FAILED
     finally:
         lock.release()

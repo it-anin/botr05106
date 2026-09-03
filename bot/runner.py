@@ -122,13 +122,24 @@ def _run_steps(ctx: Context, flow: dict) -> None:
                     ctx.dry_run_issues.append(issue)
                     log.warning("  dry-run ตรวจไม่ผ่าน: %s", exc)
                     continue
-                _report_failure(ctx, step, exc)
+                # flow ซ้อนกันหลายชั้น ข้อผิดพลาดจะไหลผ่านทุกชั้นขึ้นมา
+                # จึงรายงานหลักฐานแค่ชั้นในสุดชั้นเดียว ไม่งั้น log จะซ้ำหลายรอบ
+                if not getattr(exc, "botr_reported", False):
+                    _report_failure(ctx, step, exc)
+
                 if on_error == "continue":
                     log.warning("  on_error: continue - ไปต่อ step ถัดไป")
                     continue
-                raise FlowError(
-                    f"flow {flow_name!r} หยุดที่ step {i} (action: {step['action']})\n{exc}"
-                ) from exc
+
+                message = (f"flow {flow_name!r} หยุดที่ step {i} "
+                           f"(action: {step['action']})\n{exc}")
+                note = crash_note(ctx)
+                if note and note.strip() not in message:
+                    message += note
+
+                error = FlowError(message)
+                error.botr_reported = True
+                raise error from exc
 
             pause = float(step.get("pause", ctx.cfg.get("runner.step_pause", 0.2)))
             if pause > 0:
@@ -161,10 +172,35 @@ def _run_one(ctx: Context, step: dict) -> None:
     raise last  # type: ignore[misc]
 
 
+def crash_note(ctx: Context) -> str:
+    """ข้อความอธิบายเพิ่ม ถ้าโปรแกรมตายไปแล้วระหว่าง flow กำลังทำงาน
+
+    ตอนโปรแกรม crash ข้อผิดพลาดที่โผล่มาจะเป็นระดับ Win32 เช่น
+    'Invalid window handle' ซึ่งอ่านแล้วไม่รู้ว่าเกิดอะไรขึ้น
+    """
+    try:
+        if ctx.app.pid is not None and not ctx.app.is_running():
+            return (
+                "\n  *** โปรแกรม ProMaxx ปิดไปแล้วหรือ crash ระหว่าง flow กำลังทำงาน ***\n"
+                "  ข้อผิดพลาดข้างบนเป็นผลพลอยได้จากการสั่งงานหน้าต่างที่ตายไปแล้ว\n"
+                "  ไม่ใช่สาเหตุที่แท้จริง - ดูภาพล่าสุดใน screenshots/ "
+                "ว่าหน้าจอค้างตรงไหนก่อนตาย"
+            )
+    except Exception:
+        pass
+    return ""
+
+
 def _report_failure(ctx: Context, step: dict, exc: Exception) -> None:
     """เก็บหลักฐานตอนพัง: ภาพหน้าจอ + โครงสร้าง control"""
     log.error("  %s ล้มเหลว: %s", step.get("action"), exc)
     log.debug("%s", traceback.format_exc())
+
+    note = crash_note(ctx)
+    if note:
+        log.error("%s", note)
+        return  # โปรแกรมตายแล้ว ไม่มีอะไรให้ถ่ายภาพหรือ dump
+
     try:
         if ctx.app.pid is None:
             return

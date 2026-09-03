@@ -28,6 +28,8 @@ class Context:
     windows: dict[str, int] = field(default_factory=dict)
     # สิ่งที่ตรวจไม่ผ่านตอน dry-run - ไม่หยุด flow แต่ทำให้ exit code ไม่เป็นศูนย์
     dry_run_issues: list[str] = field(default_factory=list)
+    # ไฟล์ที่ flow ผลิตออกมาได้ - เขียนลง logs/last_run.json ให้ปลายทางเช็คได้
+    outputs: list[dict] = field(default_factory=list)
     flow_name: str = ""
     step_index: int = 0
     step_name: str = ""

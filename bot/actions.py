@@ -486,6 +486,69 @@ def act_assert_text(ctx: Context, step: dict) -> None:
     log.info("ตรวจข้อความผ่าน: %r", text)
 
 
+def _record_output(ctx: Context, path) -> None:
+    """จดไฟล์ที่ flow ผลิตได้ ไว้เขียนลง logs/last_run.json"""
+    from datetime import datetime
+
+    try:
+        stat = path.stat()
+    except OSError:
+        return
+    entry = {
+        "path": str(path),
+        "size": stat.st_size,
+        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+    }
+    # ไฟล์เดิมถูกจดไว้แล้วก็อัปเดตแทนการเพิ่มซ้ำ
+    for existing in ctx.outputs:
+        if existing["path"] == entry["path"]:
+            existing.update(entry)
+            return
+    ctx.outputs.append(entry)
+
+
+@action("move_file", ("from", "to", "overwrite"))
+def act_move_file(ctx: Context, step: dict) -> None:
+    """ย้าย/เปลี่ยนชื่อไฟล์ - ใช้เผยแพร่ผลลัพธ์แบบปลอดภัย
+
+    รูปแบบที่แนะนำ: ส่งออกเป็นชื่อชั่วคราวก่อน ตรวจให้ผ่าน แล้วค่อยเปลี่ยนชื่อ
+    เป็นชื่อจริง ถ้า flow ล้มกลางทาง ไฟล์ชื่อจริงของรอบก่อนจะยังอยู่ครบ
+    และปลายทางจะไม่มีวันหยิบไฟล์ที่เขียนไม่เสร็จไปใช้
+    """
+    from pathlib import Path
+
+    src_raw, dst_raw = step.get("from"), step.get("to")
+    if not src_raw or not dst_raw:
+        raise StepError("move_file ต้องระบุทั้ง 'from' และ 'to'")
+    src, dst = Path(str(src_raw)), Path(str(dst_raw))
+    overwrite = bool(step.get("overwrite", True))
+
+    if ctx.dry_run:
+        log.info("dry-run: จะย้าย %s -> %s", src, dst)
+        return
+
+    if not src.exists():
+        raise StepError(
+            f"ไม่พบไฟล์ต้นทาง {src} จึงย้ายไม่ได้\n"
+            f"  ต้องมี step ที่สร้างไฟล์นี้ (และ assert_file ตรวจแล้ว) มาก่อน"
+        )
+    if dst.exists() and not overwrite:
+        raise StepError(f"ไฟล์ปลายทาง {dst} มีอยู่แล้ว และตั้ง overwrite: false ไว้")
+
+    size = src.stat().st_size
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        # replace() เขียนทับได้ และเป็น atomic เมื่ออยู่ไดรฟ์เดียวกัน
+        src.replace(dst)
+    except OSError as exc:
+        raise StepError(f"ย้าย {src} ไป {dst} ไม่สำเร็จ: {exc}") from exc
+
+    log.info("เผยแพร่ไฟล์แล้ว: %s (%s ไบต์)", dst, f"{size:,}")
+    # ไฟล์ต้นทางไม่มีอยู่แล้ว ต้องถอดออกจากรายการ ไม่งั้นปลายทางอาจหยิบผิดไฟล์
+    ctx.outputs[:] = [o for o in ctx.outputs if o["path"] != str(src)]
+    _record_output(ctx, dst)
+
+
 @action("assert_file", ("path", "min_size", "max_age"))
 def act_assert_file(ctx: Context, step: dict) -> None:
     """ตรวจว่าไฟล์ถูกเขียนจริงในรอบนี้ (ใช้ยืนยันผลการส่งออก)
@@ -523,6 +586,7 @@ def act_assert_file(ctx: Context, step: dict) -> None:
                     )
                 log.info("ไฟล์พร้อมแล้ว: %s (%s ไบต์ เขียนเมื่อ %.0f วินาทีที่แล้ว)",
                          path, f"{size:,}", age)
+                _record_output(ctx, path)
                 return
             last_size = size
         if _time.monotonic() >= deadline:
