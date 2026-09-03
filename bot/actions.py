@@ -240,18 +240,26 @@ CHANGE_KEYS = ("expect_change", "change_region", "change_timeout",
 
 
 def _resolve_watch(ctx: Context, step: dict) -> int | None:
-    """หา hwnd ที่จะเฝ้าดูการเปลี่ยนแปลง - None แปลว่าใช้เป้าหมายของการกดเอง"""
-    if "change_window" in step and "change_control" in step:
-        raise StepError("ใส่ได้อย่างเดียวระหว่าง 'change_window' กับ 'change_control'")
+    """หา hwnd ที่จะเฝ้าดูการเปลี่ยนแปลง - None แปลว่าใช้เป้าหมายของการกดเอง
+
+    ใส่ change_window อย่างเดียว = เฝ้าทั้งหน้าต่างนั้น
+    ใส่ change_control อย่างเดียว = หา control ในหน้าต่างของ step นั้น
+    ใส่ทั้งคู่ = หา control ในหน้าต่างที่ระบุ (ใช้เมื่อผลไปโผล่คนละหน้าต่างกับที่กด)
+    """
+    has_window = "change_window" in step
+    has_control = "change_control" in step
+    if not has_window and not has_control:
+        return None
 
     timeout = _timeout(ctx, step)
-    if "change_window" in step:
-        return ctx.resolve_window(step["change_window"], timeout=timeout)
-    if "change_control" in step:
-        window = ctx.resolve_window(step.get("window"), timeout=timeout)
-        return ctx.resolve_control(window, step["change_control"],
-                                   timeout=timeout, key="change_control")
-    return None
+    window = ctx.resolve_window(
+        step["change_window"] if has_window else step.get("window"),
+        timeout=timeout,
+    )
+    if not has_control:
+        return window
+    return ctx.resolve_control(window, step["change_control"],
+                               timeout=timeout, key="change_control")
 
 
 def _make_watcher(ctx: Context, step: dict, default_hwnd: int):
