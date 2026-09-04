@@ -232,8 +232,8 @@ def _double_clicked() -> bool:
     ดับเบิลคลิก = Explorer สร้าง console ใหม่ให้ มีแค่ process ของเราเกาะอยู่
     สั่งจาก terminal = shell เกาะ console นั้นอยู่ก่อนแล้ว จึงนับได้ตั้งแต่ 2 ขึ้นไป
 
-    ต่างกันตรงนี้สำคัญ เพราะตอนดับเบิลคลิกต้องค้างหน้าต่างไว้ให้อ่านผลก่อนปิด
-    แต่ตอนสั่งจาก terminal ห้ามค้าง ไม่งั้น Task Scheduler จะแขวนรอตลอดไป
+    ใช้แยกว่าจะเติม flow ตั้งต้นให้เองหรือไม่ - ดับเบิลคลิกใส่ argument ไม่ได้
+    ส่วนตอนสั่งจาก terminal ต้องเคารพ argument ที่ผู้ใช้พิมพ์มาเสมอ
     """
     if not getattr(sys, "frozen", False):
         return False  # รันจาก python ตรง ๆ ไม่ใช่ดับเบิลคลิกแน่นอน
@@ -258,8 +258,10 @@ def main(argv: list[str] | None = None) -> int:
 
     # ดับเบิลคลิกไม่มีทางใส่ argument ได้ จึงเติม flow ตั้งต้นให้เอง
     # ไม่งั้น argparse จะฟ้อง "required: command" แล้วหน้าต่างปิดทันทีจนอ่านไม่ทัน
-    interactive = not argv and _double_clicked()
-    if interactive:
+    #
+    # จบแล้วปิดหน้าต่างไปเลย ไม่ค้างรอกดปุ่ม - ดูผลย้อนหลังได้ที่
+    # logs\last_run.json (สรุปผลรอบล่าสุด) และ logs\bot.log (log เต็ม)
+    if not argv and _double_clicked():
         flow = _default_flow()
         print(f"เปิดจากการดับเบิลคลิก - จะรัน {flow}\n")
         argv = ["run", flow]
@@ -270,12 +272,6 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\nยกเลิกโดยผู้ใช้", file=sys.stderr)
         return EXIT_FAILED
-    finally:
-        if interactive:
-            try:
-                input("\nกด Enter เพื่อปิดหน้าต่างนี้...")
-            except Exception:
-                pass
 
 
 if __name__ == "__main__":
