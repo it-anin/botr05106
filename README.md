@@ -352,12 +352,30 @@ steps:
 ได้ `dist\promaxx-bot\promaxx-bot.exe` ที่ใช้แทน `python run.py` ได้ทุกคำสั่งเหมือนเดิม
 (`run`, `inspect`, `stop`, `actions`, `--dry-run`, `-v` ใช้ได้ครบ)
 
+### ดับเบิลคลิกให้รันเลย
+
+**อย่าดับเบิลคลิก `promaxx-bot.exe` ตรง ๆ** — มันเป็น CLI ที่ต้องมี argument เสมอ
+ดับเบิลคลิกจะได้ error `the following arguments are required: command`
+แล้วหน้าต่างปิดทันทีจนดูเหมือนโปรแกรมไม่ทำงาน
+
+ให้ดับเบิลคลิก **`run-export.bat`** ที่ build ให้อัตโนมัติแทน — กำหนด flow ไว้ให้แล้ว
+และ `pause` ค้างหน้าต่างไว้ให้อ่านผลก่อนปิด
+
+อยากได้ปุ่มสำหรับ flow อื่น คัดลอกไฟล์ `.bat` แล้วแก้ชื่อ flow บรรทัดที่ 4 ได้เลย
+แต่ต้อง**เรียก exe ด้วย path เต็ม `"%~dp0promaxx-bot.exe"`** ห้ามเรียกด้วยชื่อเปล่า
+เพราะวินโดวส์ตั้ง `NoDefaultCurrentDirectoryInExePath=1` ไว้ (มาตรการกัน exe hijacking)
+`cmd.exe` จึงไม่ยอมหา `.exe` ใน current directory แม้จะ `cd` เข้าไปแล้วก็ตาม
+
+และ**เขียนไฟล์ `.bat` เป็นภาษาอังกฤษล้วน** — `cmd.exe` ตีความ encoding ของไฟล์ `.bat`
+ไม่แน่นอน (ใส่ UTF-8 BOM ก็ไม่ช่วย ต่างจาก `.ps1`) ส่วนตัว exe เองแสดงภาษาไทยถูกอยู่แล้ว
+
 `flows\`, `settings.yaml`, `.env` ถูกคัดลอกไปวางไว้**ข้าง exe** (ไม่ได้ฝังเข้าไปข้างใน)
 แก้ไข flow หรือรหัสผ่านได้โดยไม่ต้อง build ใหม่ — build ใหม่เฉพาะตอนแก้โค้ด Python
 
 ```
 dist\promaxx-bot\
-  promaxx-bot.exe
+  run-export.bat      <- ดับเบิลคลิกอันนี้
+  promaxx-bot.exe     <- อย่าดับเบิลคลิก (เป็น CLI ต้องมี argument)
   flows\              <- แก้ตรงนี้ได้เลย ไม่ต้อง rebuild
   settings.yaml
   .env
