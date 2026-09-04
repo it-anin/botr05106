@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,13 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
+if getattr(sys, "frozen", False):
+    # รันจาก .exe ที่ build ด้วย PyInstaller (--onedir) - __file__ ตอนนั้นชี้เข้าไป
+    # ใน bundle ชั่วคราว ไม่ใช่ตำแหน่งจริงที่ผู้ใช้วาง flows/settings.yaml/.env
+    # sys.executable ชี้ตำแหน่ง .exe จริงเสมอ จึงใช้โฟลเดอร์ที่มันอยู่แทน
+    ROOT = Path(sys.executable).resolve().parent
+else:
+    ROOT = Path(__file__).resolve().parent.parent
 
 _VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 

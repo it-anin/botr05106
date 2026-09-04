@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     ลงทะเบียน Scheduled Task ให้บอท ProMaxx Report รันอัตโนมัติ
 
@@ -29,24 +29,37 @@ param(
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$python = "C:\Program Files\Python311\python.exe"
-
-if (-not (Test-Path $python)) {
-    $found = Get-Command python -ErrorAction SilentlyContinue
-    if ($null -eq $found) { throw "หา python.exe ไม่เจอ" }
-    $python = $found.Source
-}
+$exePath = Join-Path $projectRoot "dist\promaxx-bot\promaxx-bot.exe"
 
 $flowArgs = ($Flows -split ',' | ForEach-Object { $_.Trim() }) -join ' '
-$arguments = "run.py run $flowArgs"
+
+# ใช้ .exe ที่ build ไว้แล้วถ้ามี (ไม่ต้องพึ่งว่าเครื่องนี้ลง Python ไว้หรือเปล่า)
+# ไม่มีก็ตกไปใช้ python run.py แบบเดิม
+if (Test-Path $exePath) {
+    $exeDir = Split-Path -Parent $exePath
+    $exec = $exePath
+    $arguments = "run $flowArgs"
+    $workDir = $exeDir
+    Write-Host "ใช้ .exe : $exePath"
+} else {
+    $python = "C:\Program Files\Python311\python.exe"
+    if (-not (Test-Path $python)) {
+        $found = Get-Command python -ErrorAction SilentlyContinue
+        if ($null -eq $found) { throw "หา python.exe ไม่เจอ และไม่พบ $exePath (ยังไม่ได้ build .\tools\build_exe.ps1)" }
+        $python = $found.Source
+    }
+    $exec = $python
+    $arguments = "run.py run $flowArgs"
+    $workDir = $projectRoot
+    Write-Host "ใช้ python: $python  (ยังไม่ได้ build .exe - รัน .\tools\build_exe.ps1 ถ้าอยากเลิกพึ่ง Python บนเครื่อง)"
+}
 
 Write-Host "โปรเจกต์ : $projectRoot"
-Write-Host "python   : $python"
-Write-Host "คำสั่ง   : $arguments"
+Write-Host "คำสั่ง   : $exec $arguments"
 Write-Host "เวลา     : $Time ทุกวัน"
 Write-Host "ชื่องาน  : $TaskName"
 
-$action = New-ScheduledTaskAction -Execute $python -Argument $arguments -WorkingDirectory $projectRoot
+$action = New-ScheduledTaskAction -Execute $exec -Argument $arguments -WorkingDirectory $workDir
 $trigger = New-ScheduledTaskTrigger -Daily -At $Time
 
 # Interactive = ต้องมี session ของผู้ใช้อยู่จริง ซึ่งเป็นเงื่อนไขบังคับของ GUI automation

@@ -13,3 +13,8 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+
+# ผลลัพธ์การ build .exe (สร้างใหม่ได้ด้วย .\tools\build_exe.ps1)
+build/
+dist/
+*.spec.bak

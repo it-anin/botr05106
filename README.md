@@ -340,12 +340,43 @@ steps:
 
 เรียงตามความเสถียร: `control_id` > `class_name` + `title` > `class_name` + `index`
 
+## Build เป็น .exe
+
+ไม่ต้องพึ่งว่าเครื่องที่รันมี Python ลงไว้หรือไม่ — build ครั้งเดียวได้ไฟล์ประมาณ 34 MB
+
+```powershell
+.\tools\build_exe.ps1
+.\dist\promaxx-bot\promaxx-bot.exe run flows/login.yaml --dry-run
+```
+
+ได้ `dist\promaxx-bot\promaxx-bot.exe` ที่ใช้แทน `python run.py` ได้ทุกคำสั่งเหมือนเดิม
+(`run`, `inspect`, `stop`, `actions`, `--dry-run`, `-v` ใช้ได้ครบ)
+
+`flows\`, `settings.yaml`, `.env` ถูกคัดลอกไปวางไว้**ข้าง exe** (ไม่ได้ฝังเข้าไปข้างใน)
+แก้ไข flow หรือรหัสผ่านได้โดยไม่ต้อง build ใหม่ — build ใหม่เฉพาะตอนแก้โค้ด Python
+
+```
+dist\promaxx-bot\
+  promaxx-bot.exe
+  flows\              <- แก้ตรงนี้ได้เลย ไม่ต้อง rebuild
+  settings.yaml
+  .env
+  logs\ screenshots\  <- สร้างเองตอนรันครั้งแรก
+```
+
+โฟลเดอร์ `dist\` และ `build\` ไม่ได้ commit เข้า git (เป็นผลลัพธ์การ build)
+ถ้าจะย้ายไปเครื่องอื่น คัดลอกทั้งโฟลเดอร์ `dist\promaxx-bot\` ไปได้เลย
+
 ## ตั้งรันอัตโนมัติ
 
 ```powershell
 .\tools\register_task.ps1 -Time 06:30 -Flows "flows/r05_106_export.yaml"
 Start-ScheduledTask -TaskName "ProMaxxReportBot"    # ทดสอบทันที
 ```
+
+`register_task.ps1` เช็คเองว่ามี `dist\promaxx-bot\promaxx-bot.exe` หรือไม่
+ถ้ามีจะตั้งงานให้เรียก .exe ตรง ๆ (ไม่ต้องพึ่ง Python บนเครื่อง) ถ้ายังไม่ได้ build
+จะตกไปใช้ `python run.py` แบบเดิม
 
 `r05_106_export.yaml` ปิดโปรแกรมให้เมื่อจบ จึงไม่มีหน้าต่างค้างบนเดสก์ท็อประหว่างวัน
 และรอบถัดไปเริ่มจากสภาพสะอาดเสมอ

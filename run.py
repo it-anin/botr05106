@@ -22,6 +22,17 @@ from bot import app as app_mod
 from bot import logging_setup
 from bot.config import ROOT, Settings
 
+# บังคับ UTF-8 ให้ stdout/stderr ตั้งแต่จุดแรกสุด ก่อนมี print() ใด ๆ ทั้งหมด
+# ไม่พึ่งพา console codepage เพราะรันจาก .exe (PyInstaller) แล้วบางที cmd/task
+# scheduler ไม่ inherit `chcp 65001` แบบเดียวกับตอนรัน python ตรง ๆ
+# ทำที่นี่แทนที่จะทำใน logging_setup.setup() เพราะบาง command (เช่น actions)
+# ไม่ได้เรียก setup() แต่ print() ภาษาไทยตรง ๆ
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 EXIT_OK = 0
 EXIT_FAILED = 1
 EXIT_BAD_USAGE = 2
