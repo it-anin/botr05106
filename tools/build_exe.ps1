@@ -58,34 +58,7 @@ if (Test-Path ".env") {
     Write-Host "  ไม่พบ .env ต้นทาง คัดลอก .env.example ไปแทน - ต้องแก้รหัสผ่านเองใน dist\.env" -ForegroundColor Yellow
 }
 
-Write-Host "=== สร้างไฟล์ .bat สำหรับดับเบิลคลิก ===" -ForegroundColor Cyan
-# promaxx-bot.exe เป็น CLI ต้องมี argument เสมอ ดับเบิลคลิก exe ตรง ๆ จะไม่มี
-# argument เลย โปรแกรมฟ้อง "the following arguments are required: command"
-# แล้วปิดทันที (console app ไม่มี argument = ปิดเร็วจนดูเหมือนไม่รันอะไรเลย)
-# ไฟล์ .bat นี้จึงกำหนด argument ให้ล่วงหน้า และ pause ท้ายสุดกันหน้าต่างปิดเร็ว
-#
-# ตัวไฟล์ .bat เขียนเป็นภาษาอังกฤษล้วนโดยตั้งใจ - cmd.exe ตีความ encoding ของ
-# ไฟล์ .bat เองไม่แน่นอน (ต่างจาก .ps1 ที่แก้ด้วย UTF-8 BOM ได้) ส่วนตัวโปรแกรม
-# exe เองแสดงผลภาษาไทยถูกต้องอยู่แล้วเพราะ reconfigure encoding ตั้งแต่ต้น run.py
-#
-# เรียก exe ด้วย path เต็ม "%~dp0promaxx-bot.exe" ห้ามเรียกด้วยชื่อเปล่า ๆ
-# เครื่องนี้ตั้ง NoDefaultCurrentDirectoryInExePath=1 (มาตรการกัน exe hijacking
-# ของวินโดวส์) cmd.exe จึงไม่ยอมหา .exe ใน current directory แม้จะ cd เข้าไปแล้ว
-# ก็ตาม - ทดสอบแล้ว dir เห็นไฟล์แต่เรียกไม่ได้ ขึ้น error 9009
-$batPath = Join-Path $distDir "run-export.bat"
-$batContent = @'
-@echo off
-chcp 65001 >nul
-cd /d "%~dp0"
-"%~dp0promaxx-bot.exe" run flows/r05_106_export.yaml
-echo.
-echo Press any key to close this window...
-pause >nul
-'@
-Set-Content -Path $batPath -Value $batContent -Encoding ASCII
-Write-Host "  สร้าง $batPath แล้ว - ดับเบิลคลิกไฟล์นี้ได้เลย"
-
 Write-Host ""
 Write-Host "=== เสร็จแล้ว ===" -ForegroundColor Green
-Write-Host "  ดับเบิลคลิกได้เลย : $batPath"
+Write-Host "  ดับเบิลคลิก exe ได้เลย : $distDir\promaxx-bot.exe"
 Write-Host "  หรือสั่งจาก CLI  : $distDir\promaxx-bot.exe run flows/login.yaml --dry-run"

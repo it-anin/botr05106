@@ -13,6 +13,8 @@ app:
   close_timeout: 8
   # title ของหน้าต่างหลักหลังล็อกอินสำเร็จ
   main_window_title: "Report Seniorsoft ProMaxx"
+  # flow ที่รันเมื่อดับเบิลคลิก promaxx-bot.exe (ไม่มีผลตอนสั่งจาก command line)
+  default_flow: "flows/r05_106_export.yaml"
 
 paths:
   logs: "logs"

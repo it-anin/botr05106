@@ -219,13 +219,63 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+# ---------------------------------------------------------- ดับเบิลคลิก
+
+# flow ที่รันเมื่อถูกดับเบิลคลิก - เปลี่ยนได้ใน settings.yaml (app.default_flow)
+# โดยไม่ต้อง build .exe ใหม่
+DEFAULT_FLOW = "flows/r05_106_export.yaml"
+
+
+def _double_clicked() -> bool:
+    """ถูกดับเบิลคลิกจาก Explorer หรือถูกสั่งจาก terminal?
+
+    ดับเบิลคลิก = Explorer สร้าง console ใหม่ให้ มีแค่ process ของเราเกาะอยู่
+    สั่งจาก terminal = shell เกาะ console นั้นอยู่ก่อนแล้ว จึงนับได้ตั้งแต่ 2 ขึ้นไป
+
+    ต่างกันตรงนี้สำคัญ เพราะตอนดับเบิลคลิกต้องค้างหน้าต่างไว้ให้อ่านผลก่อนปิด
+    แต่ตอนสั่งจาก terminal ห้ามค้าง ไม่งั้น Task Scheduler จะแขวนรอตลอดไป
+    """
+    if not getattr(sys, "frozen", False):
+        return False  # รันจาก python ตรง ๆ ไม่ใช่ดับเบิลคลิกแน่นอน
     try:
+        from ctypes import c_uint, windll
+
+        buf = (c_uint * 4)()
+        return windll.kernel32.GetConsoleProcessList(buf, 4) == 1
+    except Exception:
+        return False
+
+
+def _default_flow() -> str:
+    try:
+        return Settings.load().get("app.default_flow", DEFAULT_FLOW)
+    except Exception:
+        return DEFAULT_FLOW
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+
+    # ดับเบิลคลิกไม่มีทางใส่ argument ได้ จึงเติม flow ตั้งต้นให้เอง
+    # ไม่งั้น argparse จะฟ้อง "required: command" แล้วหน้าต่างปิดทันทีจนอ่านไม่ทัน
+    interactive = not argv and _double_clicked()
+    if interactive:
+        flow = _default_flow()
+        print(f"เปิดจากการดับเบิลคลิก - จะรัน {flow}\n")
+        argv = ["run", flow]
+
+    try:
+        args = build_parser().parse_args(argv)
         return args.func(args)
     except KeyboardInterrupt:
         print("\nยกเลิกโดยผู้ใช้", file=sys.stderr)
         return EXIT_FAILED
+    finally:
+        if interactive:
+            try:
+                input("\nกด Enter เพื่อปิดหน้าต่างนี้...")
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
