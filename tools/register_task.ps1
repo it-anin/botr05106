@@ -12,6 +12,10 @@
 
 .EXAMPLE
     .\tools\register_task.ps1 -Time 22:00 -Flows "flows/login.yaml,flows/daily_report.yaml" -TaskName "ProMaxxBot_Night"
+
+.EXAMPLE
+    .\tools\register_task.ps1 -Time 08:30 -Flows "flows/r05_106_export.yaml" -WithUpload
+    # export R05.106 แล้วอัปโหลดเข้า Supabase ต่อในงานเดียว
 #>
 [CmdletBinding()]
 param(
@@ -23,7 +27,11 @@ param(
 
     [string]$TaskName = "ProMaxxReportBot",
 
-    [int]$TimeLimitMinutes = 60
+    [int]$TimeLimitMinutes = 60,
+
+    # ลงทะเบียนให้รัน tools\run_and_upload.ps1 แทนการเรียกบอทตรง ๆ
+    # = export เสร็จแล้วอัปโหลดเข้า Supabase ต่อทันที (ดูคำอธิบายในไฟล์นั้น)
+    [switch]$WithUpload
 )
 
 $ErrorActionPreference = "Stop"
@@ -52,6 +60,17 @@ if (Test-Path $exePath) {
     $arguments = "run.py run $flowArgs"
     $workDir = $projectRoot
     Write-Host "ใช้ python: $python  (ยังไม่ได้ build .exe - รัน .\tools\build_exe.ps1 ถ้าอยากเลิกพึ่ง Python บนเครื่อง)"
+}
+
+# ห่อด้วย run_and_upload.ps1 อีกชั้น เพื่อให้ export เสร็จแล้วอัปโหลดต่อในงานเดียว
+# (ไม่แตะ $workDir เดิม - wrapper จัดการ working dir ของบอทเองด้วย Push-Location)
+if ($WithUpload) {
+    $wrapper = Join-Path $PSScriptRoot "run_and_upload.ps1"
+    if (-not (Test-Path $wrapper)) { throw "ไม่พบ $wrapper" }
+    $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$wrapper`" -Flows `"$Flows`""
+    $exec = "powershell.exe"
+    $workDir = $projectRoot
+    Write-Host "โหมด     : export แล้วอัปโหลดเข้า Supabase ต่อ (-WithUpload)"
 }
 
 Write-Host "โปรเจกต์ : $projectRoot"
