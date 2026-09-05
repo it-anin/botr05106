@@ -4,11 +4,12 @@
 
 .DESCRIPTION
     สคริปต์นี้เป็นแค่ "ตัวสั่งงาน" — ไม่มี logic การอัปโหลดอยู่ในนี้เลยแม้แต่บรรทัดเดียว
-    โค้ดอัปโหลดตัวจริงอยู่ที่ SaleSupport\upload-products.mjs ที่เดียว พร้อม guard + เทส
+    โค้ดอัปโหลดตัวจริงคือ ..\upload-products.mjs (root ของ repo นี้) พร้อม guard + เทส
 
-    ⚠️ ห้ามก๊อป upload-products.mjs มาไว้ในโปรเจกต์นี้
-       upload-customer-history.mjs เคยถูกก๊อปจนมี 3 สำเนาที่โค้ดไม่ตรงกัน
-       แล้วตัวที่ Task Scheduler เรียกจริงกลายเป็นตัวเก่า — แก้บั๊กที่ repo แล้วของจริงไม่เปลี่ยน
+    ⚠️ upload-products.mjs ต้องมีสำเนาเดียวในโลก คืออันที่อยู่ repo นี้
+       ห้ามก๊อปไปวางที่อื่น ให้เรียกด้วย path เต็มแทน — upload-customer-history.mjs
+       เคยถูกก๊อปจนมี 3 สำเนาที่โค้ดไม่ตรงกัน แล้วตัวที่ Task Scheduler เรียกจริง
+       กลายเป็นตัวเก่า แก้บั๊กที่ repo แล้วของที่รันจริงไม่เปลี่ยน
 
     exit code: 0 = สำเร็จ · 2 = อัปโหลดข้าม (ไฟล์ไม่ได้ถูกอัปเดต) · 1 = ผิดพลาด
 
@@ -30,8 +31,9 @@
 param(
     [string]$Flows = "flows/r05_106_export.yaml",
 
-    # path เริ่มต้นอ้าง $env:USERPROFILE ไม่ hardcode ชื่อผู้ใช้ เพราะจะย้ายไปรันเครื่อง Server
-    [string]$Uploader = "$env:USERPROFILE\Desktop\SaleSupport\upload-products.mjs",
+    # uploader อยู่ใน repo เดียวกันนี้ (root ของโปรเจกต์) — อ้างจาก $PSScriptRoot
+    # ไม่ hardcode ชื่อผู้ใช้/ไดรฟ์ เพราะจะย้ายไปรันเครื่อง Server
+    [string]$Uploader = (Join-Path (Split-Path -Parent $PSScriptRoot) "upload-products.mjs"),
     [string]$Csv = "$env:USERPROFILE\Desktop\run-upload-stock\R05.106.CSV",
     [string]$Node = "C:\Program Files\nodejs\node.exe",
 
@@ -102,7 +104,7 @@ if (-not (Test-Path $Node)) {
     throw "ไม่พบ node.exe ที่ $Node (ส่ง -Node ชี้ path เองได้)"
 }
 if (-not (Test-Path $Uploader)) {
-    throw "ไม่พบสคริปต์อัปโหลดที่ $Uploader`n   เครื่องนี้ต้อง clone repo SaleSupport ไว้ (ห้ามก๊อปเฉพาะไฟล์ .mjs)"
+    throw "ไม่พบสคริปต์อัปโหลดที่ $Uploader`n   ต้องมีไฟล์นี้ใน repo และรัน npm install ก่อน (ต้องการ @supabase/supabase-js)"
 }
 
 $uploadArgs = @($Uploader, "--file", $Csv)

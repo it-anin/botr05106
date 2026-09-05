@@ -1,0 +1,13 @@
+{
+  "name": "botr05106-uploader",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ส่วนอัปโหลด R05.106 เข้า Supabase ของบอท (ตัวบอทเองเป็น Python ดู requirements.txt)",
+  "scripts": {
+    "test": "node --test upload-products.test.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.103.0"
+  }
+}

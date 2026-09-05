@@ -392,12 +392,62 @@ dist\promaxx-bot\
 โฟลเดอร์ `dist\` และ `build\` ไม่ได้ commit เข้า git (เป็นผลลัพธ์การ build)
 ถ้าจะย้ายไปเครื่องอื่น คัดลอกทั้งโฟลเดอร์ `dist\promaxx-bot\` ไปได้เลย
 
+## อัปโหลดเข้า Supabase ต่อท้าย export
+
+ไฟล์ที่ export ออกมาต้องขึ้นตาราง `products` ของ Supabase ทุกวัน — โปรเจกต์นี้ทำให้จบในตัว
+ไม่ต้องพึ่ง repo อื่น (ย้ายเข้ามา 2569-09-06 จาก `it-anin/anin_sale_support`)
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `upload-products.mjs` | โค้ดอัปโหลดตัวจริง (Node) — อ่าน CSV → ตารางพัก → RPC สลับเข้า `products` |
+| `upload-products.test.mjs` | เทส 11 ตัว (`npm test`) |
+| `products-import-swap.sql` | สร้าง `products_import` + RPC `swap_products_from_import()` — **รันใน Supabase ครั้งเดียว** |
+| `tools\run_and_upload.ps1` | ตัวสั่งงาน: รันบอท → export สำเร็จค่อยอัปโหลด |
+
+**ติดตั้งครั้งแรกบนเครื่องใหม่**
+
+```powershell
+npm install                       # ต้องมี Node ที่ C:\Program Files\nodejs\
+copy .env.example .env            # แล้วใส่ PROMAXX_* และ SUPABASE_SERVICE_KEY
+npm test                          # ต้องผ่าน 11/11
+.\tools\run_and_upload.ps1 -DryRunUpload      # ซ้อมเต็มรอบ ไม่เขียน DB
+```
+
+**ใช้งาน**
+
+```powershell
+.\tools\run_and_upload.ps1                    # export + อัปโหลดจริง
+.\tools\run_and_upload.ps1 -SkipExport        # อัปโหลดซ้ำด้วยไฟล์เดิม ไม่เปิด ProMaxx
+```
+
+exit code: `0` สำเร็จ · `2` อัปโหลดข้าม (ไฟล์ไม่ได้ถูกอัปเดตวันนี้ ไม่ใช่ error) · `1` ผิดพลาด
+log ของฝั่งอัปโหลดอยู่ที่ `upload-products.log` (ฝั่งบอทอยู่ `logs\bot.log` ตามเดิม)
+
+**guard ก่อนแตะ DB มี 4 ชั้น** — ไฟล์ต้องเป็นของวันนี้ · ไฟล์ต้องเขียนเสร็จแล้ว (รอขนาดนิ่ง) ·
+หัวคอลัมน์ต้องครบ 7 ตัว · จำนวนแถวต้องไม่หดเกิน 20% จากที่มีใน Supabase (ข้ามได้ด้วย `--force`)
+และตัวเขียนจริงเป็น staging + RPC swap ใน transaction เดียว **พังตรงไหนข้อมูลเดิมอยู่ครบเสมอ**
+
+> 🔗 `upload-products.mjs` ต้องซิงค์กับ `App.tsx` ของ repo `it-anin/anin_sale_support`
+> (หน้า Admin → Upload R05.106) เพราะอ่านไฟล์เดียวกันและเขียนตารางเดียวกัน
+> ถ้า ProMaxx เปลี่ยนหัวคอลัมน์ ต้องแก้ทั้ง 2 ที่
+>
+> 🚫 ห้ามก๊อป `upload-products.mjs` ไปวางที่อื่น ให้เรียกด้วย path เต็ม —
+> `upload-customer-history.mjs` ของอีกโปรเจกต์เคยถูกก๊อปจนมี 3 สำเนาที่โค้ดไม่ตรงกัน
+> แล้วตัวที่ Task Scheduler เรียกจริงกลายเป็นตัวเก่า
+
 ## ตั้งรันอัตโนมัติ
 
 ```powershell
+# export อย่างเดียว
 .\tools\register_task.ps1 -Time 06:30 -Flows "flows/r05_106_export.yaml"
+
+# export แล้วอัปโหลดเข้า Supabase ต่อ (แนะนำ)
+.\tools\register_task.ps1 -Time 06:30 -Flows "flows/r05_106_export.yaml" -WithUpload
+
 Start-ScheduledTask -TaskName "ProMaxxReportBot"    # ทดสอบทันที
 ```
+
+⚠️ ตั้งได้เครื่องเดียวเท่านั้น — 2 เครื่องรันพร้อมกันจะแย่งกันเขียนตาราง `products`
 
 `register_task.ps1` เช็คเองว่ามี `dist\promaxx-bot\promaxx-bot.exe` หรือไม่
 ถ้ามีจะตั้งงานให้เรียก .exe ตรง ๆ (ไม่ต้องพึ่ง Python บนเครื่อง) ถ้ายังไม่ได้ build
