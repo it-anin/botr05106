@@ -402,7 +402,11 @@ dist\promaxx-bot\
 | `upload-products.mjs` | โค้ดอัปโหลดตัวจริง (Node) — อ่าน CSV → ตารางพัก → RPC สลับเข้า `products` |
 | `upload-products.test.mjs` | เทส 11 ตัว (`npm test`) |
 | `products-import-swap.sql` | สร้าง `products_import` + RPC `swap_products_from_import()` — **รันใน Supabase ครั้งเดียว** |
-| `tools\run_and_upload.ps1` | ตัวสั่งงาน: รันบอท → export สำเร็จค่อยอัปโหลด |
+| `bot\upload.py` | ตัวเรียก uploader หลัง flow สำเร็จ (flag `--then-upload`) |
+| `tools\run_and_upload.ps1` | ตัวสั่งงานสำหรับงานมือ (มี `-SkipExport` / `-DryRunUpload`) |
+
+`build_exe.ps1` ก๊อป `upload-products.mjs` + `package.json` + `node_modules` ไปไว้ข้าง exe ให้ด้วย
+→ **`dist\promaxx-bot\` เป็นชุดสมบูรณ์ ก๊อปโฟลเดอร์เดียวไปเครื่องอื่นได้เลย** (ขอแค่เครื่องนั้นมี Node)
 
 **ติดตั้งครั้งแรกบนเครื่องใหม่**
 
@@ -413,10 +417,20 @@ npm test                          # ต้องผ่าน 11/11
 .\tools\run_and_upload.ps1 -DryRunUpload      # ซ้อมเต็มรอบ ไม่เขียน DB
 ```
 
-**ใช้งาน**
+**ใช้งาน — วิธีหลักคือ flag ของ exe เอง ไม่ต้องพึ่ง .ps1**
 
 ```powershell
-.\tools\run_and_upload.ps1                    # export + อัปโหลดจริง
+cd dist\promaxx-bot
+.\promaxx-bot.exe run flows/r05_106_export.yaml --then-upload
+.\promaxx-bot.exe run flows/r05_106_export.yaml --then-upload --upload-dry-run   # ซ้อม ไม่เขียน DB
+```
+
+`--then-upload` จะอัปโหลดต่อเมื่อ flow สำเร็จเท่านั้น และหยิบ path ไฟล์จาก `ctx.outputs`
+ที่ flow บันทึกไว้เอง (ไม่ต้องบอกชื่อไฟล์) · Task Scheduler จึงชี้ `.exe` ตรง ๆ ได้
+
+`tools\run_and_upload.ps1` ยังอยู่สำหรับงานมือ โดยเฉพาะกรณี export ผ่านแล้วแต่อัปโหลดพัง:
+
+```powershell
 .\tools\run_and_upload.ps1 -SkipExport        # อัปโหลดซ้ำด้วยไฟล์เดิม ไม่เปิด ProMaxx
 ```
 

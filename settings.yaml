@@ -20,6 +20,13 @@ paths:
   logs: "logs"
   screenshots: "screenshots"
 
+# ใช้เมื่อสั่ง run ... --then-upload (export เสร็จแล้วอัปเข้า Supabase ต่อ)
+upload:
+  # สคริปต์อัปโหลด อยู่โฟลเดอร์เดียวกับ .exe (หรือรากโปรเจกต์เมื่อรันด้วย python)
+  script: "upload-products.mjs"
+  # ว่างไว้ = หา node จาก PATH ก่อน แล้วค่อย C:\Program Files\nodejs\node.exe
+  node_exe: ""
+
 runner:
   default_timeout: 30
   poll_interval: 0.25

@@ -50,6 +50,19 @@ Copy-Item "flows" "$distDir\flows" -Recurse -Force
 Copy-Item "settings.yaml" "$distDir\settings.yaml" -Force
 Copy-Item "tools" "$distDir\tools" -Recurse -Force
 
+# ── ส่วนอัปโหลด Supabase (Node) ──
+# ต้องก๊อปไปด้วย ไม่งั้น `promaxx-bot.exe run ... --then-upload` จะหา uploader ไม่เจอ
+# (bot\config.py ตั้ง ROOT = โฟลเดอร์ของ .exe เมื่อ frozen ทุกอย่างจึงต้องอยู่ข้าง exe)
+Write-Host "=== คัดลอกส่วนอัปโหลด Supabase ===" -ForegroundColor Cyan
+Copy-Item "upload-products.mjs" "$distDir\upload-products.mjs" -Force
+Copy-Item "package.json" "$distDir\package.json" -Force
+if (Test-Path "node_modules") {
+    Copy-Item "node_modules" "$distDir\node_modules" -Recurse -Force
+    Write-Host "  คัดลอก node_modules แล้ว"
+} else {
+    Write-Host "  ⚠️ ไม่พบ node_modules - รัน npm install ก่อน ไม่งั้น --then-upload จะพัง" -ForegroundColor Yellow
+}
+
 if (Test-Path ".env") {
     Copy-Item ".env" "$distDir\.env" -Force
     Write-Host "  คัดลอก .env (มีรหัสผ่าน) แล้ว - ตรวจสอบว่า dist\ อยู่ในที่ปลอดภัย" -ForegroundColor Yellow

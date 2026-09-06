@@ -5,6 +5,7 @@
     python run.py inspect --watch           # เฝ้าดู dump ใหม่ทุกครั้งที่หน้าจอเปลี่ยน
     python run.py run flows/login.yaml --dry-run
     python run.py run flows/login.yaml
+    python run.py run flows/r05_106_export.yaml --then-upload   # export แล้วอัปเข้า Supabase
     python run.py actions                   # ดูรายการ action ที่ใช้ใน YAML ได้
     python run.py stop                      # ปิดโปรแกรมทิ้ง
 """
@@ -37,6 +38,11 @@ EXIT_OK = 0
 EXIT_FAILED = 1
 EXIT_BAD_USAGE = 2
 EXIT_ALREADY_RUNNING = 3
+
+# --then-upload: uploader ข้ามรอบ (ไฟล์ไม่ได้อัปเดต) ไม่ใช่ error
+# ใช้เลข 2 ซ้ำกับ EXIT_BAD_USAGE โดยตั้งใจ ให้ตรงกับ exit code ของ upload-products.mjs
+# และ tools\run_and_upload.ps1 — แยกกันได้จาก log เพราะ bad usage เกิดก่อน flow ใด ๆ จะรัน
+EXIT_UPLOAD_SKIPPED = 2
 
 
 def _boot(args) -> tuple[Settings, "logging_setup.logging.Logger"]:
@@ -145,6 +151,21 @@ def cmd_run(args) -> int:
         log.info("จบทุก flow เรียบร้อย")
         _write_last_run(cfg, args, started, "ok", EXIT_OK, None,
                         runner.ctx.outputs)
+
+        # อัปโหลดต่อท้ายในงานเดียวกัน - เวลาที่ไฟล์ export ออกไม่แน่นอน
+        # ตั้ง Task แยกไว้เวลาตายตัวแล้ว uploader จะข้ามเพราะเห็นไฟล์ของเมื่อวาน
+        if getattr(args, "then_upload", False):
+            if args.dry_run:
+                log.info("ข้ามการอัปโหลด เพราะ flow รันแบบ --dry-run (ไม่มีไฟล์ใหม่)")
+                return EXIT_OK
+            from bot.upload import UPLOAD_OK, UPLOAD_SKIPPED, run_upload
+
+            rc = run_upload(cfg, runner.ctx.outputs,
+                            dry_run=getattr(args, "upload_dry_run", False))
+            if rc == UPLOAD_OK:
+                return EXIT_OK
+            return EXIT_UPLOAD_SKIPPED if rc == UPLOAD_SKIPPED else EXIT_FAILED
+
         return EXIT_OK
     except Exception as exc:
         log.error("flow ล้มเหลว: %s", exc)
@@ -208,6 +229,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="หา control และตรวจ flow แต่ไม่กด/ไม่พิมพ์อะไรจริง")
     r.add_argument("--allow-concurrent", action="store_true",
                    help="ข้ามการกันบอทซ้อน (ปกติไม่ควรใช้)")
+    r.add_argument("--then-upload", action="store_true",
+                   help="flow สำเร็จแล้วอัปโหลดไฟล์เข้า Supabase ต่อ (ใช้ upload-products.mjs)")
+    r.add_argument("--upload-dry-run", action="store_true",
+                   help="ใช้คู่กับ --then-upload: ตรวจไฟล์อย่างเดียว ไม่เขียน Supabase")
     r.set_defaults(func=cmd_run)
 
     a = sub.add_parser("actions", help="แสดงรายการ action ที่ใช้ใน YAML ได้")

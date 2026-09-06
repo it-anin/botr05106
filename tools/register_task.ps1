@@ -62,15 +62,11 @@ if (Test-Path $exePath) {
     Write-Host "ใช้ python: $python  (ยังไม่ได้ build .exe - รัน .\tools\build_exe.ps1 ถ้าอยากเลิกพึ่ง Python บนเครื่อง)"
 }
 
-# ห่อด้วย run_and_upload.ps1 อีกชั้น เพื่อให้ export เสร็จแล้วอัปโหลดต่อในงานเดียว
-# (ไม่แตะ $workDir เดิม - wrapper จัดการ working dir ของบอทเองด้วย Push-Location)
+# export เสร็จแล้วอัปโหลดต่อในงานเดียว - เป็น flag ของตัวบอทเอง
+# ไม่ต้องห่อด้วย powershell + .ps1 อีกชั้น Task จึงชี้ .exe ตรง ๆ ได้
 if ($WithUpload) {
-    $wrapper = Join-Path $PSScriptRoot "run_and_upload.ps1"
-    if (-not (Test-Path $wrapper)) { throw "ไม่พบ $wrapper" }
-    $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$wrapper`" -Flows `"$Flows`""
-    $exec = "powershell.exe"
-    $workDir = $projectRoot
-    Write-Host "โหมด     : export แล้วอัปโหลดเข้า Supabase ต่อ (-WithUpload)"
+    $arguments = "$arguments --then-upload"
+    Write-Host "โหมด     : export แล้วอัปโหลดเข้า Supabase ต่อ (--then-upload)"
 }
 
 Write-Host "โปรเจกต์ : $projectRoot"
