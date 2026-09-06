@@ -250,6 +250,11 @@ def build_parser() -> argparse.ArgumentParser:
 # โดยไม่ต้อง build .exe ใหม่
 DEFAULT_FLOW = "flows/r05_106_export.yaml"
 
+# ดับเบิลคลิกแล้วอัปโหลดเข้า Supabase ต่อด้วย (settings.yaml: app.default_then_upload)
+# เดิมดับเบิลคลิกได้แค่ export แล้วจบ ทำให้คนกดนึกว่าข้อมูลขึ้น Supabase แล้ว
+# แต่ badge หน้าเว็บไม่ขยับ - งานจริงของบอทตัวนี้คือ "export แล้วอัปโหลด" ไม่ใช่ export เฉย ๆ
+DEFAULT_THEN_UPLOAD = True
+
 
 def _double_clicked() -> bool:
     """ถูกดับเบิลคลิกจาก Explorer หรือถูกสั่งจาก terminal?
@@ -271,11 +276,19 @@ def _double_clicked() -> bool:
         return False
 
 
-def _default_flow() -> str:
+def _default_run_args() -> list[str]:
+    """argument ที่ใช้แทนตอนถูกดับเบิลคลิก - ปรับได้ใน settings.yaml ไม่ต้อง build ใหม่"""
+    flow, then_upload = DEFAULT_FLOW, DEFAULT_THEN_UPLOAD
     try:
-        return Settings.load().get("app.default_flow", DEFAULT_FLOW)
+        cfg = Settings.load()
+        flow = cfg.get("app.default_flow", DEFAULT_FLOW)
+        then_upload = bool(cfg.get("app.default_then_upload", DEFAULT_THEN_UPLOAD))
     except Exception:
-        return DEFAULT_FLOW
+        pass  # settings.yaml พังก็ยังต้องรันได้ด้วยค่าตั้งต้น
+    args = ["run", flow]
+    if then_upload:
+        args.append("--then-upload")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -287,9 +300,8 @@ def main(argv: list[str] | None = None) -> int:
     # จบแล้วปิดหน้าต่างไปเลย ไม่ค้างรอกดปุ่ม - ดูผลย้อนหลังได้ที่
     # logs\last_run.json (สรุปผลรอบล่าสุด) และ logs\bot.log (log เต็ม)
     if not argv and _double_clicked():
-        flow = _default_flow()
-        print(f"เปิดจากการดับเบิลคลิก - จะรัน {flow}\n")
-        argv = ["run", flow]
+        argv = _default_run_args()
+        print(f"เปิดจากการดับเบิลคลิก - จะรัน {' '.join(argv[1:])}\n")
 
     try:
         args = build_parser().parse_args(argv)

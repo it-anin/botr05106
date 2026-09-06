@@ -15,6 +15,9 @@ app:
   main_window_title: "Report Seniorsoft ProMaxx"
   # flow ที่รันเมื่อดับเบิลคลิก promaxx-bot.exe (ไม่มีผลตอนสั่งจาก command line)
   default_flow: "flows/r05_106_export.yaml"
+  # ดับเบิลคลิกแล้วอัปโหลดเข้า Supabase ต่อด้วยไหม (เท่ากับใส่ --then-upload)
+  # false = export ออกไฟล์อย่างเดียว · ไม่มีผลกับ Task Scheduler ซึ่งส่ง argument มาเอง
+  default_then_upload: true
 
 paths:
   logs: "logs"
