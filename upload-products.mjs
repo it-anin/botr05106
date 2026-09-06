@@ -27,11 +27,14 @@ import { resolve } from 'path';
 
 // ─── CONFIG ───────────────────────────────────────────────
 // ลองไฟล์ CSV จากหลาย path ตามลำดับ — ใช้ path แรกที่เจอ
+// ปกติไม่ได้ใช้ list นี้ เพราะ --then-upload ส่ง --file มาจาก ctx.outputs ของ flow อยู่แล้ว
+// เป็นแค่ทางสำรองตอนสั่ง `node upload-products.mjs` เปล่า ๆ
+// ตัวแรกอ้าง USERPROFILE จึงย้ายเครื่อง/เปลี่ยนชื่อ user ได้โดยไม่ต้องแก้โค้ด
 const CSV_CANDIDATES = [
+  `${process.env.USERPROFILE ?? ''}\\Desktop\\run-upload-stock\\R05.106.CSV`,
+  `${process.env.USERPROFILE ?? ''}\\Desktop\\run-upload-stock\\R05.106.csv`,
   'C:\\Users\\AninMainPC\\Desktop\\run-upload-stock\\R05.106.CSV',
-  'C:\\Users\\AninMainPC\\Desktop\\run-upload-stock\\R05.106.csv',
   'C:\\Users\\Arm\\Documents\\update_stock\\R05.106.CSV',
-  'C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.CSV',
   'C:\\Users\\BigYa-spare\\Documents\\update_stock\\R05.106.CSV',
 ];
 

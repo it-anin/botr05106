@@ -15,7 +15,7 @@
 # ในช่องชื่อไฟล์ให้เอง
 #
 # อยากเปลี่ยนเป็นไฟล์ที่ไม่ทับกันให้ใส่วันที่ในชื่อ เช่น
-#     value: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106_${BOT_DATE}.CSV"
+#     value: "${USERPROFILE}\\Desktop\\run-upload-stock\\R05.106_${BOT_DATE}.CSV"
 # ตัวแปรที่ใช้ได้: ${BOT_DATE} ${BOT_TIME} ${BOT_DATETIME}
 #
 # CSV ที่ได้เป็น UTF-8 พร้อม BOM (ทดสอบแล้ว ไม่ใช่ ANSI ไทย ภาษาไทยไม่เพี้ยน)
@@ -76,7 +76,7 @@ steps:
     name: พิมพ์ path ปลายทางชั่วคราว
     window: save
     control: { class_name: "Edit", control_id: 1152 }
-    value: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.part.CSV"
+    value: "${USERPROFILE}\\Desktop\\run-upload-stock\\R05.106.part.CSV"
 
   - action: click
     name: กดปุ่ม Save
@@ -133,7 +133,7 @@ steps:
   # max_age กันไฟล์ .part ค้างจากรอบก่อนถูกนับว่าผ่าน
   - action: assert_file
     name: ตรวจว่าไฟล์ชั่วคราวถูกเขียนจริง
-    path: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.part.CSV"
+    path: "${USERPROFILE}\\Desktop\\run-upload-stock\\R05.106.part.CSV"
     min_size: 100000
     max_age: 300
     timeout: 180
@@ -141,8 +141,8 @@ steps:
   # ผ่านการตรวจแล้วค่อยเผยแพร่เป็นชื่อจริง - อยู่ไดรฟ์เดียวกันจึงเป็น atomic
   - action: move_file
     name: เปลี่ยนชื่อเป็นไฟล์จริง
-    from: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.part.CSV"
-    to: "C:\\Users\\BigYa-spare\\Desktop\\run-upload-stock\\R05.106.CSV"
+    from: "${USERPROFILE}\\Desktop\\run-upload-stock\\R05.106.part.CSV"
+    to: "${USERPROFILE}\\Desktop\\run-upload-stock\\R05.106.CSV"
 
   - action: screenshot
     name: 01_after_export
