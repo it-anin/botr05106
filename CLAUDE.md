@@ -159,6 +159,53 @@ PowerBuilder เงียบสนิทเมื่อกดพลาด ทุ
 ซึ่งทำทั้งหมดใน transaction เดียว (ดู `products-import-swap.sql` — ต้องรันใน Supabase
 SQL Editor ครั้งเดียวก่อนใช้งาน)
 
+#### `products_import` ไม่ว่าง = swap ล้ม — เช็คตัวนี้ก่อนเสมอ
+
+swap ที่สำเร็จจะ**ล้าง `products_import` ทิ้งเป็นขั้นสุดท้าย** ดังนั้น
+
+| `products_import` | แปลว่า |
+|---|---|
+| 0 แถว | swap ผ่าน — ปัญหาอยู่ที่อื่น |
+| มีแถวค้าง | staging เขียนครบแล้วแต่ swap ล้ม → rollback ทั้งก้อน `products` ไม่ขยับ |
+
+อาการที่ผู้ใช้เห็นคือ "บอทรันจบปกติแต่หน้าเว็บไม่อัปเดต" เพราะส่วนที่พังเกิด**หลัง**
+ProMaxx ปิดไปแล้ว query เดียวแยกได้ว่าพังฝั่งไหน — อย่าเพิ่งไปไล่ดู flow/GUI
+
+```sql
+select (select count(*) from products) as products,
+       (select count(*) from products_import) as staging,
+       (select max(updated_at) from products) as newest;
+```
+
+#### safeupdate บล็อกทั้ง `DELETE` และ `UPDATE` ที่ไม่มี `WHERE`
+
+ทุก statement ใน function ที่ swap เรียกถึงต้องมี `WHERE` เสมอ ใช้คอลัมน์ `NOT NULL`
+เป็นเงื่อนไขที่เป็นจริงทุกแถว (`where id is not null` / `where profile_id is not null`)
+
+> เสียเวลาไป 2 วัน (2569-09-15 → 09-17) เพราะคอมเมนต์ในฟังก์ชันเขียนยืนยันผิดว่า
+> "safeupdate ปฏิเสธเฉพาะ DELETE" แล้วปล่อย `update price_change_seen set ...`
+> ไว้ไม่มี `WHERE` — **อย่าเชื่อคอมเมนต์ว่าอะไรปลอดภัย ให้ดู error จริง**
+
+#### `swap_products_from_import()` เรียกฟังก์ชันข้าม repo — พังได้จากที่ที่มองไม่เห็น
+
+ตัวจริงบน Supabase มี `perform public.log_price_changes();` อยู่ก่อน delete
+ซึ่ง**ไม่มีในไฟล์ `products-import-swap.sql`** และนิยามอยู่คนละ repo
+(`price-change-setup.sql` ใน `anin_sale_support`)
+
+ผลคือ swap ล้มได้ด้วย error จาก statement ที่ไม่มีอยู่ในไฟล์ SQL ของโปรเจกต์นี้เลย
+และพัง**เฉพาะรอบที่มีราคาเปลี่ยน** (`if logged > 0`) รอบที่ราคาไม่ขยับจะผ่านปกติ —
+เป็นเหตุผลที่อาการดูสุ่ม
+
+**ก่อนแก้ ให้อ่านตัวจริงจาก Supabase เสมอ อย่าอ่านจากไฟล์ในโปรเจกต์**
+
+```sql
+select pg_get_functiondef('public.swap_products_from_import()'::regprocedure);
+select pg_get_functiondef('public.log_price_changes()'::regprocedure);
+```
+
+⚠️ รัน `products-import-swap.sql` ทับเมื่อไหร่ บรรทัด `perform` จะหายเงียบ ๆ
+แล้วแจ้งเตือนราคาหยุดทำงานโดยไม่มีสัญญาณ — ต้องเพิ่มกลับทุกครั้ง
+
 ## ผลลัพธ์การรัน
 
 | ไฟล์ | ใช้ดูอะไร |
@@ -171,6 +218,36 @@ SQL Editor ครั้งเดียวก่อนใช้งาน)
 
 `outputs` ใน `last_run.json` เก็บเฉพาะไฟล์ที่**เผยแพร่จริง** — ไฟล์ `.part` ที่ถูก
 เปลี่ยนชื่อไปแล้วถูกถอดออก สคริปต์ปลายทางควรเช็ค `status == "ok"` ก่อนใช้
+
+### สาเหตุที่ uploader ล้มอยู่ใน `upload-products.log` เท่านั้น
+
+`bot.log` บันทึกแค่ `อัปโหลดไม่สำเร็จ (exit 1)` — ข้อความจริงจาก Supabase
+(`❌ สลับข้อมูลไม่สำเร็จ: ...`) อยู่ใน `upload-products.log` คนละไฟล์ ดูผิดไฟล์แล้ว
+จะไม่เห็นอะไรเลยและนึกว่าบอทพัง
+
+```powershell
+Get-Content .\upload-products.log -Tail 30 -Encoding UTF8
+```
+
+**ต้องมี `-Encoding UTF8`** ไม่งั้น PowerShell 5.1 อ่านด้วย system codepage แล้ว
+ภาษาไทยกลายเป็นขยะทั้งหน้าจอ (ข้อความ error ภาษาอังกฤษยังอ่านออก จึงพอใช้ได้ถ้าลืม)
+
+## เครื่องที่รันจริงคือ AninMainPC ไม่ใช่เครื่อง dev
+
+repo นี้อยู่บนเครื่อง dev (`BIG-IT` / user `BigYa-spare`) แต่ **flow ที่รันทุกวันจริง
+อยู่บน `AninMainPC`** ซึ่ง ping ไม่เจอจากเครื่อง dev — เข้าไปดู log เองไม่ได้ ต้องให้
+ผู้ใช้รันคำสั่งบนเครื่องนั้นแล้วส่งผลมา
+
+| | เครื่อง dev (ที่นี่) | AninMainPC (ที่รันจริง) |
+|---|---|---|
+| โฟลเดอร์บอท | `Desktop\BOTR05106\dist\promaxx-bot\` | `Desktop\promaxx-bot\` |
+| โครงสร้าง | มีชั้น `BOTR05106\dist` ครอบ | **ไม่มี** — ก๊อปเฉพาะ `promaxx-bot` ไปวาง |
+
+`logs/`, `.env`, `upload-products.log` บนเครื่อง dev เป็นของรอบทดสอบ **ไม่ใช่ของรอบจริง**
+อย่าวินิจฉัยจากไฟล์พวกนี้แล้วสรุปว่าเกิดอะไรขึ้นบนเครื่องจริง
+
+สิ่งเดียวที่เช็คได้จากทุกเครื่องคือ **Supabase** เพราะเป็นตัวกลางร่วมกัน — เริ่มจากตรงนั้น
+ก่อนเสมอ (ดู query ในหัวข้อ "`products_import` ไม่ว่าง = swap ล้ม")
 
 ## กับดักเฉพาะเครื่องนี้
 
